@@ -12,11 +12,7 @@
 /*
   Naprawic strone serwera i reakcje (upload plikow)
 
-  Dokonczyc robienie plytki
-
   Zrobic auto ustawianie czasu letniego
-
-  Dodac mozliwosc statycznych ustawien IP z pliku ipconfig.txt
 
   Ukrywac wrazliwe pliki ze strony WWW lub blokowac dostep
 */
@@ -25,9 +21,8 @@ IPAddress timeServerIP;
 WiFiUDP udp;
 
 ESP8266WebServer server(80);
-IPAddress ip(192, 168, 2, 91);
+
 File uploadFile;
-File root;
 OneWire oneWire(OW_PORT);
 DallasTemperature sensors(&oneWire);
 
@@ -42,17 +37,12 @@ void setup(void) {
     if (SD.begin(SD_CS))
       Serial.println("SD Card initialized.");
     if (SD.exists(CONFIGFILE)) {
-      if (wifiConn()) {
-        Serial.print("Connected! IP address: ");
-        Serial.println(WiFi.localIP());
-        if (SD.exists(IPFILE)) SD.remove(IPFILE); //Zrzut adresu IP
-        root = SD.open(IPFILE, FILE_WRITE);      //Do okreslonego pliku
-        root.print(WiFi.localIP());
-        root.close();
+      if (wifiConn())
         httpserver = true;
-      } else {
+      else {
         Serial.print("Could not connect to WiFi!\n");
         Serial.print("Check SSID and PASSWORD and try again\n");
+        Serial.print("Maybe static IP settings are incorrect\n");
         Serial.print("Log mode only\n");
         httpserver = false;
       }
@@ -71,10 +61,10 @@ void setup(void) {
   }
 
   if (httpserver) {
-    server.on("/", HTTP_GET, printDirectory);
-    server.on("/", HTTP_DELETE, handleDelete);
-    server.on("/", HTTP_PUT, handleCreate);
-    server.on("/", HTTP_POST, []() {
+    server.on("/list", HTTP_GET, printDirectory);
+    server.on("/edit", HTTP_DELETE, handleDelete);
+    server.on("/edit", HTTP_PUT, handleCreate);
+    server.on("/edit", HTTP_POST, []() {
       returnOK();
     }, handleFileUpload);
     server.on("/pass.pwd", returnForbidden);
@@ -144,7 +134,8 @@ void loop() {
   _t4_ /= 10;
 
   if (hasSD) {
-    updatetime();
+    //updatetime();
+    File root;
     if (!digitalRead(SD_D) && hasSD)
       root = SD.open(workfile, FILE_WRITE);
     else {
@@ -197,6 +188,21 @@ void loop() {
   }
 }
 
+IPAddress stringToIP(String input) {
+  int parts[4] = {0, 0, 0, 0};
+  int part = 0;
+  for (int a = 0; a < input.length(); a++) {
+    char b = input[a];
+    if (b == '.') {
+      part++;
+      continue;
+    }
+    parts[part] *= 10;
+    parts[part] += b - '0';
+  }
+  return IPAddress(parts[0], parts[1], parts[2], parts[3]);
+}
+
 void createfile() {
   String path = "archiwum/" + (String)czas[6];
   if (czas[5] < 10) path += "0" + (String)czas[5];
@@ -226,7 +232,6 @@ void updatetime() {
   delay(1000);
   int cb = udp.parsePacket();
   if (cb) {
-    Serial.println(cb);
     udp.read(packetBuffer, NTP_PACKET_SIZE);
     unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
     unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
@@ -263,19 +268,81 @@ unsigned long sendNTPpacket(IPAddress & address) {
 }
 
 bool wifiConn () {
-  uploadFile = SD.open(CONFIGFILE, FILE_READ);
-  char tmp = uploadFile.read();
+  File root = SD.open(IPSETFILE, FILE_READ);
+  char tmp = root.read();
   String tmpS = "";
+  while (!dhcp && (!gotip || !gotgate || !gotsub)) {
+    while (READ_COND) {
+      tmpS += tmp;
+      tmp = root.read();
+    }
+
+    if (tmpS == "mode") {
+      tmpS = "";
+      tmp = root.read();
+      while (READ_COND) {
+        tmpS += tmp;
+        tmp = root.read();
+      }
+      if (tmpS == "dhcp")dhcp = true;
+      if (tmpS == "static")dhcp = false;
+    }
+
+    if (tmpS == "ip") {
+      tmpS = "";
+      tmp = root.read();
+      while (READ_COND) {
+        tmpS += tmp;
+        tmp = root.read();
+      }
+      sip = tmpS;
+      gotip = true;
+    }
+    if (tmpS == "gateway") {
+      tmpS = "";
+      tmp = root.read();
+      while (READ_COND) {
+        tmpS += tmp;
+        tmp = root.read();
+      }
+      sgate = tmpS;
+      gotgate = true;
+    }
+    if (tmpS == "subnet") {
+      tmpS = "";
+      tmp = root.read();
+      while (READ_COND) {
+        tmpS += tmp;
+        tmp = root.read();
+      }
+      ssub = tmpS;
+      gotsub = true;
+    }
+    tmp = root.read();
+    while (READ_COND2)tmp = root.read();
+    tmpS = "";
+  }
+  root.close();
+  sip.trim();
+  sgate.trim();
+  ssub.trim();
+
+  tmp = 1;
+  tmpS = "";
+
+  root = SD.open("PASS.PWD", FILE_READ);
+  tmp = root.read();
+  tmpS = "";
   while (READ_COND) {
     tmpS += tmp;
-    tmp = uploadFile.read();
+    tmp = root.read();
   }
   if (tmpS == "ssid") {
     tmpS = "";
-    tmp = uploadFile.read();
+    tmp = root.read();
     while (READ_COND) {
       tmpS += tmp;
-      tmp = uploadFile.read();
+      tmp = root.read();
     }
   } else {
     Serial.print("FORMAT:\n");
@@ -287,19 +354,19 @@ bool wifiConn () {
   strcpy(ssid, tmpS.c_str());
   tmpS = "";
 
-  tmp = uploadFile.read();
-  while (tmp == '\r' || tmp == '\n' || tmp == '\t' || tmp == ' = ' )
-    tmp = uploadFile.read();
+  tmp = root.read();
+  while (tmp == '\r' || tmp == '\n' || tmp == '\t' || tmp == '=' )
+    tmp = root.read();
   while (READ_COND) {
     tmpS += tmp;
-    tmp = uploadFile.read();
+    tmp = root.read();
   }
   if (tmpS == "pass") {
     tmpS = "";
-    tmp = uploadFile.read();
+    tmp = root.read();
     while (READ_COND) {
       tmpS += tmp;
-      tmp = uploadFile.read();
+      tmp = root.read();
     }
   } else {
     Serial.print("FORMAT:\n");
@@ -310,10 +377,12 @@ bool wifiConn () {
   char *password = new char[tmpS.length() + 1];
   strcpy(password, tmpS.c_str());
   tmpS = "";
-  uploadFile.close();
+  root.close();
 
   //Serial.println(ssid);
   //Serial.println(password);
+
+  if (!dhcp) WiFi.config(stringToIP(sip), stringToIP(sgate), stringToIP(ssub));
   WiFi.begin(ssid, password);
   Serial.print("Connecting to ");
   Serial.println(ssid);
@@ -324,6 +393,26 @@ bool wifiConn () {
   }
   if (i >= 21 && WiFi.status() != WL_CONNECTED)
     return false;
+  Serial.print("Connected! \nIP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.print("Gateway: ");
+  Serial.println(WiFi.gatewayIP());
+  Serial.print("Subnet mask: ");
+  Serial.println(WiFi.subnetMask());
+  Serial.print("IP obtain mode: ");
+  if (dhcp) Serial.println("DHCP");
+  else Serial.println("Static");
+  if (dhcp) {
+    if (SD.exists(DHCPFILE)) SD.remove(DHCPFILE); //Zrzut adresu IP
+    root = SD.open(DHCPFILE, FILE_WRITE);
+    root.println("mode=dhcp");
+    root.print("ip="); root.println(WiFi.localIP());
+    root.flush();
+    root.print("gateway="); root.println(WiFi.gatewayIP());
+    root.print("subnet="); root.println(WiFi.subnetMask());
+    root.flush();
+    root.close();
+  }
   return true;
 }
 
