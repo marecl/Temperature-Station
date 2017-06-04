@@ -10,11 +10,12 @@
 #include <pgmspace.h>
 #include "defs.h"
 /*
-  Naprawic strone serwera i reakcje (upload plikow)
+  Add authentication
+  Fix server and client side reactions (upload/download/delete etc)
 
-  Zrobic auto ustawianie czasu letniego
+  Automatic daylight saving
 
-  Ukrywac wrazliwe pliki ze strony WWW lub blokowac dostep
+  Hide important files (*.pwd and so on)
 */
 
 IPAddress timeServerIP;
@@ -100,7 +101,7 @@ void setup(void) {
   Wire.endTransmission();
   readPCF8563();
   createfile();
-  Serial.println(printDateTime(false));
+  Serial.println(printDateTime());
 }
 
 void loop() {
@@ -115,11 +116,11 @@ void loop() {
     if (digitalRead(SD_D) && hasSD) {
       hasSD = false;
       httpserver = false;
-      Serial.println("!!! BRAK KARTY !!!");
+      Serial.println("!!! NO SDCARD !!!");
     }
     if (!hasSD) {
       while (digitalRead(SD_D)) delay(1000);
-      Serial.println("Znaleziono karte. Restart...");
+      Serial.println("SD Card found. Reboot...");
       ESP.restart();
     }
   }
@@ -141,12 +142,12 @@ void loop() {
     else {
       hasSD = false;
       httpserver = false;
-      Serial.println("!!! BRAK KARTY !!!");
+      Serial.println("!!! NO SDCARD !!!");
     }
     delay(150);
     if (root && hasSD) {
       readPCF8563();
-      root.print(printDateTime(true) + ";");
+      root.print(printDateTime() + ";");
       root.flush();
       root.print(_t1_, 1);
       root.print(";");
@@ -159,7 +160,7 @@ void loop() {
       root.flush();
       root.close();
       Serial.print("Temperatura (");
-      Serial.print(printDateTime(false));
+      Serial.print(printDateTime());
       Serial.print("):\n\tWewnatrz: ");
       Serial.println(_t1_);
       Serial.print("\tNa zewnatrz: ");
@@ -172,17 +173,16 @@ void loop() {
   }
   while (czas[1] % 5 == 0) {
     readPCF8563();
-    //if (czas[1] == 165 && czas[3] == 165) ESP.restart();
     if (httpserver)
       server.handleClient();
     if (digitalRead(SD_D) && hasSD) {
       hasSD = false;
       httpserver = false;
-      Serial.println("!!! BRAK KARTY !!!");
+      Serial.println("!!! NO SDCARD !!!");
     }
     if (!hasSD) {
       while (digitalRead(SD_D)) delay(1000);
-      Serial.println("Znaleziono karte. Restart...");
+      Serial.println("SD Card found. Reboot...");
       ESP.restart();
     }
   }
@@ -469,7 +469,7 @@ bool loadFromSdCard(String path) {
 }
 
 void handleFileUpload() {
-  if (server.uri() != "/edit") return;
+  if (server.uri() != "/") return;
   HTTPUpload& upload = server.upload();
   if (upload.status == UPLOAD_FILE_START) {
     if (SD.exists((char *)upload.filename.c_str())) SD.remove((char *)upload.filename.c_str());
@@ -514,6 +514,7 @@ void deleteRecursive(String path) {
 void handleDelete() {
   if (server.args() == 0) return returnFail("BAD ARGS");
   String path = server.arg(0);
+  Serial.println(path);
   if (path == "/" || !SD.exists((char *)path.c_str())) {
     returnFail("BAD PATH");
     return;
@@ -597,27 +598,15 @@ void handleNotFound() {
   Serial.print(message);
 }
 
-String printDateTime(bool tofile) {
+String printDateTime() {
   char datestring[20];
-  if (!tofile) {
-    snprintf_P(datestring,
-               countof(datestring),
-               PSTR("%02u/%02u/%04u %02u:%02u:%02u"),
-               czas[3],
-               czas[5],
-               czas[6],
-               czas[2],
-               czas[1],
-               czas[0] );
-  } else if (tofile) {
-    snprintf_P(datestring,
-               countof(datestring),
-               PSTR("%02u/%02u/%04u;%02u:%02u"),
-               czas[3],
-               czas[5],
-               czas[6],
-               czas[2],
-               czas[1] );
-  }
+  snprintf_P(datestring,
+             countof(datestring),
+             PSTR("%02u/%02u/%04u;%02u:%02u"),
+             czas[3],
+             czas[5],
+             czas[6],
+             czas[2],
+             czas[1] );
   return datestring;
 }
