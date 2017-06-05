@@ -188,21 +188,6 @@ void loop() {
   }
 }
 
-IPAddress stringToIP(String input) {
-  int parts[4] = {0, 0, 0, 0};
-  int part = 0;
-  for (int a = 0; a < input.length(); a++) {
-    char b = input[a];
-    if (b == '.') {
-      part++;
-      continue;
-    }
-    parts[part] *= 10;
-    parts[part] += b - '0';
-  }
-  return IPAddress(parts[0], parts[1], parts[2], parts[3]);
-}
-
 void createfile() {
   String path = "archiwum/" + (String)czas[6];
   if (czas[5] < 10) path += "0" + (String)czas[5];

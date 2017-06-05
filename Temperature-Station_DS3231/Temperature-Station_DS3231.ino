@@ -9,20 +9,7 @@
 #include <Wire.h>
 #include <RtcDS3231.h>
 #include <pgmspace.h>
-#define SDA D1
-#define SCL D2
-#define OW_PORT D3
-#define SD_CS D4
-#define READ_COND (tmp != '\r' && tmp != '\n' && tmp != 255 && tmp != '=')
-#define countof(a) (sizeof(a) / sizeof(a[0]))
-
-#define CONFIGFILE "PASS.TXT"
-#define IPFILE "ip.txt"
-#define NTPSERV "tempus1.gum.gov.pl"
-#define _temp1_ pokoj
-#define _temp2_ nadworze
-#define _temp3_ piec_wyjscie
-#define _temp4_ piec_powrot
+#include "defs.h"
 /*
   Zrobic podglad ostatnich 24h w pliku domyslnie otwartym
   Zrobic auto ustawianie czasu letniego
@@ -31,27 +18,14 @@
 
   Dodac LEDa jakby byl blad (np. zly czas)
 */
-byte _temp1_[8] = {0x28, 0xFF, 0x3B, 0xBD, 0x72, 0x16, 0x05, 0x69};
-byte _temp2_[8] = {0x28, 0xA5, 0xE2, 0x27, 0x00, 0x00, 0x80, 0x8A};
-byte _temp3_[8] = {0x28, 0xFF, 0xE2, 0x33, 0x34, 0x16, 0x04, 0xB6};
-byte _temp4_[8] = {0x28, 0xFF, 0xB0, 0xDC, 0x33, 0x16, 0x03, 0x8A};
-double _t1_ = 0, _t2_ = 0, _t3_ = 0, _t4_ = 0;
-String workfile = "TEMP.CSV";
-
 RtcDS3231<TwoWire> Rtc(Wire);
 
-unsigned int localPort = 2390;
 IPAddress timeServerIP;
-const char* ntpServerName = NTPSERV;
-const int NTP_PACKET_SIZE = 48;
-byte packetBuffer[ NTP_PACKET_SIZE];
 WiFiUDP udp;
 
 ESP8266WebServer server(80);
 
-static bool hasSD = false;
-static bool httpserver = false;
-bool letni = true;
+
 RtcDateTime teraz;
 File uploadFile;
 File root;
@@ -79,16 +53,9 @@ void setup(void) {
   }
 
   if (SD.exists(CONFIGFILE)) {
-    if (wifiConn()) {
-      Serial.print("Connected! IP address: ");
-      Serial.println(WiFi.localIP());
+    if (wifiConn())
       httpserver = true;
-
-      if (SD.exists(IPFILE)) SD.remove(IPFILE); //Zrzut adresu IP
-      root = SD.open(IPFILE, FILE_WRITE);      //Do okreslonego pliku
-      root.print(WiFi.localIP());
-      root.close();
-    } else {
+    else {
       Serial.print("Could not connect to WiFi!\n");
       Serial.print("Check SSID and PASSWORD and try again\n");
       Serial.print("Log mode only\n");
@@ -147,7 +114,7 @@ void setup(void) {
   }
   teraz = Rtc.GetDateTime();
   createfile();
-  Serial.println(printDateTime(teraz, false));
+  Serial.println(printDateTime(teraz));
 
 }
 
@@ -177,7 +144,7 @@ void loop() {
     delay(150);
     if (root) {
       teraz = Rtc.GetDateTime();
-      root.print(printDateTime(teraz, true) + ";");
+      root.print(printDateTime(teraz) + ";");
       root.flush();
       root.print(_t1_, 1);
       root.print(";");
@@ -190,7 +157,7 @@ void loop() {
       root.flush();
       root.close();
       Serial.print("Temperatura (");
-      Serial.print(printDateTime(teraz, false));
+      Serial.print(printDateTime(teraz));
       Serial.print("):\n\tWewnatrz: ");
       Serial.println(_t1_);
       Serial.print("\tNa zewnatrz: ");
@@ -259,6 +226,155 @@ void updatetime() {
   }
 }
 
+bool wifiConn () {
+  File root = SD.open(IPSETFILE, FILE_READ);
+  char tmp = root.read();
+  String tmpS = "";
+  while (!dhcp && (!gotip || !gotgate || !gotsub)) {
+    while (READ_COND) {
+      tmpS += tmp;
+      tmp = root.read();
+    }
+
+    if (tmpS == "mode") {
+      tmpS = "";
+      tmp = root.read();
+      while (READ_COND) {
+        tmpS += tmp;
+        tmp = root.read();
+      }
+      if (tmpS == "dhcp")dhcp = true;
+      if (tmpS == "static")dhcp = false;
+    }
+
+    if (tmpS == "ip") {
+      tmpS = "";
+      tmp = root.read();
+      while (READ_COND) {
+        tmpS += tmp;
+        tmp = root.read();
+      }
+      sip = tmpS;
+      gotip = true;
+    }
+    if (tmpS == "gateway") {
+      tmpS = "";
+      tmp = root.read();
+      while (READ_COND) {
+        tmpS += tmp;
+        tmp = root.read();
+      }
+      sgate = tmpS;
+      gotgate = true;
+    }
+    if (tmpS == "subnet") {
+      tmpS = "";
+      tmp = root.read();
+      while (READ_COND) {
+        tmpS += tmp;
+        tmp = root.read();
+      }
+      ssub = tmpS;
+      gotsub = true;
+    }
+    tmp = root.read();
+    while (READ_COND2)tmp = root.read();
+    tmpS = "";
+  }
+  root.close();
+  sip.trim();
+  sgate.trim();
+  ssub.trim();
+
+  tmp = 1;
+  tmpS = "";
+
+  root = SD.open("PASS.PWD", FILE_READ);
+  tmp = root.read();
+  tmpS = "";
+  while (READ_COND) {
+    tmpS += tmp;
+    tmp = root.read();
+  }
+  if (tmpS == "ssid") {
+    tmpS = "";
+    tmp = root.read();
+    while (READ_COND) {
+      tmpS += tmp;
+      tmp = root.read();
+    }
+  } else {
+    Serial.print("FORMAT:\n");
+    Serial.print("ssid=[SSID]\n");
+    Serial.print("pass=[PASSWORD]\n");
+    return false;
+  }
+  char *ssid = new char[tmpS.length() + 1];
+  strcpy(ssid, tmpS.c_str());
+  tmpS = "";
+
+  tmp = root.read();
+  while (tmp == '\r' || tmp == '\n' || tmp == '\t' || tmp == '=' )
+    tmp = root.read();
+  while (READ_COND) {
+    tmpS += tmp;
+    tmp = root.read();
+  }
+  if (tmpS == "pass") {
+    tmpS = "";
+    tmp = root.read();
+    while (READ_COND) {
+      tmpS += tmp;
+      tmp = root.read();
+    }
+  } else {
+    Serial.print("FORMAT:\n");
+    Serial.print("ssid=[SSID]\n");
+    Serial.print("pass=[PASSWORD]\n");
+    return false;
+  }
+  char *password = new char[tmpS.length() + 1];
+  strcpy(password, tmpS.c_str());
+  tmpS = "";
+  root.close();
+
+  //Serial.println(ssid);
+  //Serial.println(password);
+
+  if (!dhcp) WiFi.config(stringToIP(sip), stringToIP(sgate), stringToIP(ssub));
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  // Wait for connection
+  uint8_t i = 0;
+  while (WiFi.status() != WL_CONNECTED && i++ < 20) {//wait 10 seconds
+    delay(500);
+  }
+  if (i >= 21 && WiFi.status() != WL_CONNECTED)
+    return false;
+  Serial.print("Connected! \nIP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.print("Gateway: ");
+  Serial.println(WiFi.gatewayIP());
+  Serial.print("Subnet mask: ");
+  Serial.println(WiFi.subnetMask());
+  Serial.print("IP obtain mode: ");
+  if (dhcp) Serial.println("DHCP");
+  else Serial.println("Static");
+  if (dhcp) {
+    if (SD.exists(DHCPFILE)) SD.remove(DHCPFILE); //Zrzut adresu IP
+    root = SD.open(DHCPFILE, FILE_WRITE);
+    root.println("mode=dhcp");
+    root.print("ip="); root.println(WiFi.localIP());
+    root.flush();
+    root.print("gateway="); root.println(WiFi.gatewayIP());
+    root.print("subnet="); root.println(WiFi.subnetMask());
+    root.flush();
+    root.close();
+  }
+  return true;
+}
+
 unsigned long sendNTPpacket(IPAddress & address) {
   Serial.println("sending NTP packet...");
   // set all bytes in the buffer to 0
@@ -282,70 +398,90 @@ unsigned long sendNTPpacket(IPAddress & address) {
   udp.endPacket();
 }
 
-bool wifiConn () {
-  uploadFile = SD.open(CONFIGFILE, FILE_READ);
-  char tmp = uploadFile.read();
-  String tmpS = "";
-  while (READ_COND) {
-    tmpS += tmp;
-    tmp = uploadFile.read();
+void printDirectory() {
+  if (!server.hasArg("dir")) return returnFail("BAD ARGS");
+  String path = server.arg("dir");
+  if (path != "/" && !SD.exists((char *)path.c_str())) return returnFail("BAD PATH");
+  File dir = SD.open((char *)path.c_str());
+  path = String();
+  if (!dir.isDirectory()) {
+    dir.close();
+    return returnFail("NOT DIR");
   }
-  if (tmpS == "ssid") {
-    tmpS = "";
-    tmp = uploadFile.read();
-    while (READ_COND) {
-      tmpS += tmp;
-      tmp = uploadFile.read();
+  dir.rewindDirectory();
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "text/json", "");
+  WiFiClient client = server.client();
+
+  server.sendContent("[");
+  for (int cnt = 0; true; ++cnt) {
+    File entry = dir.openNextFile();
+    if (!entry)
+      break;
+
+    String output;
+    if (cnt > 0)
+      output = ',';
+
+    output += "{\"type\":\"";
+    output += (entry.isDirectory()) ? "dir" : "file";
+    output += "\",\"name\":\"";
+    output += entry.name();
+    output += "\"";
+    output += "}";
+    server.sendContent(output);
+    entry.close();
+  }
+  server.sendContent("]");
+  dir.close();
+}
+
+void handleNotFound() {
+  if (hasSD && loadFromSdCard(server.uri())) return;
+  String message = "PLIKU NIE ZNALEZIONO\n\n";
+  message += "URI: ";
+  message += server.uri();
+  message += "\nMethod: ";
+  message += (server.method() == HTTP_GET) ? "GET" : "POST";
+  message += "\nArguments: ";
+  message += server.args();
+  message += "\n";
+  for (uint8_t i = 0; i < server.args(); i++) {
+    message += " NAME:" + server.argName(i) + "\n VALUE:" + server.arg(i) + "\n";
+  }
+  server.send(404, "text/plain", message);
+  Serial.print(message);
+}
+
+void handleDelete() {
+  if (server.args() == 0) return returnFail("BAD ARGS");
+  String path = server.arg(0);
+  if (path == "/" || !SD.exists((char *)path.c_str())) {
+    returnFail("BAD PATH");
+    return;
+  }
+  deleteRecursive(path);
+  returnOK();
+}
+
+void handleCreate() {
+  if (server.args() == 0) return returnFail("BAD ARGS");
+  String path = server.arg(0);
+  if (path == "/" || SD.exists((char *)path.c_str())) {
+    returnFail("BAD PATH");
+    return;
+  }
+
+  if (path.indexOf('.') > 0) {
+    File file = SD.open((char *)path.c_str(), FILE_WRITE);
+    if (file) {
+      file.write((const char *)0);
+      file.close();
     }
   } else {
-    Serial.print("FORMAT:\n");
-    Serial.print("ssid=[SSID]\n");
-    Serial.print("pass=[PASSWORD]\n");
-    return false;
+    SD.mkdir((char *)path.c_str());
   }
-  char *ssid = new char[tmpS.length() + 1];
-  strcpy(ssid, tmpS.c_str());
-  tmpS = "";
-
-  tmp = uploadFile.read();
-  while (tmp == '\r' || tmp == '\n' || tmp == '\t' || tmp == ' = ' )
-    tmp = uploadFile.read();
-  while (READ_COND) {
-    tmpS += tmp;
-    tmp = uploadFile.read();
-  }
-  if (tmpS == "pass") {
-    tmpS = "";
-    tmp = uploadFile.read();
-    while (READ_COND) {
-      tmpS += tmp;
-      tmp = uploadFile.read();
-    }
-  } else {
-    Serial.print("FORMAT:\n");
-    Serial.print("ssid=[SSID]\n");
-    Serial.print("pass=[PASSWORD]\n");
-    return false;
-  }
-  char *password = new char[tmpS.length() + 1];
-  strcpy(password, tmpS.c_str());
-  tmpS = "";
-  uploadFile.close();
-
-  //Serial.println(ssid);
-  //Serial.println(password);
-
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-  // Wait for connection
-  uint8_t i = 0;
-  while (WiFi.status() != WL_CONNECTED && i++ < 20) {//wait 10 seconds
-    delay(500);
-  }
-  if (i >= 21 && WiFi.status() != WL_CONNECTED)
-    return false;
-  return true;
+  returnOK();
 }
 
 void returnOK() {
@@ -414,142 +550,4 @@ void handleFileUpload() {
     if (uploadFile) uploadFile.close();
     Serial.print("Upload: END, Size: "); Serial.println(upload.totalSize);
   }
-}
-
-void deleteRecursive(String path) {
-  File file = SD.open((char *)path.c_str());
-  if (!file.isDirectory()) {
-    file.close();
-    SD.remove((char *)path.c_str());
-    return;
-  }
-
-  file.rewindDirectory();
-  while (true) {
-    File entry = file.openNextFile();
-    if (!entry) break;
-    String entryPath = path + "/" + entry.name();
-    if (entry.isDirectory()) {
-      entry.close();
-      deleteRecursive(entryPath);
-    } else {
-      entry.close();
-      SD.remove((char *)entryPath.c_str());
-    }
-    yield();
-  }
-
-  SD.rmdir((char *)path.c_str());
-  file.close();
-}
-
-void handleDelete() {
-  if (server.args() == 0) return returnFail("BAD ARGS");
-  String path = server.arg(0);
-  if (path == "/" || !SD.exists((char *)path.c_str())) {
-    returnFail("BAD PATH");
-    return;
-  }
-  deleteRecursive(path);
-  returnOK();
-}
-
-void handleCreate() {
-  if (server.args() == 0) return returnFail("BAD ARGS");
-  String path = server.arg(0);
-  if (path == "/" || SD.exists((char *)path.c_str())) {
-    returnFail("BAD PATH");
-    return;
-  }
-
-  if (path.indexOf('.') > 0) {
-    File file = SD.open((char *)path.c_str(), FILE_WRITE);
-    if (file) {
-      file.write((const char *)0);
-      file.close();
-    }
-  } else {
-    SD.mkdir((char *)path.c_str());
-  }
-  returnOK();
-}
-
-void printDirectory() {
-  if (!server.hasArg("dir")) return returnFail("BAD ARGS");
-  String path = server.arg("dir");
-  if (path != "/" && !SD.exists((char *)path.c_str())) return returnFail("BAD PATH");
-  File dir = SD.open((char *)path.c_str());
-  path = String();
-  if (!dir.isDirectory()) {
-    dir.close();
-    return returnFail("NOT DIR");
-  }
-  dir.rewindDirectory();
-  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server.send(200, "text/json", "");
-  WiFiClient client = server.client();
-
-  server.sendContent("[");
-  for (int cnt = 0; true; ++cnt) {
-    File entry = dir.openNextFile();
-    if (!entry)
-      break;
-
-    String output;
-    if (cnt > 0)
-      output = ',';
-
-    output += "{\"type\":\"";
-    output += (entry.isDirectory()) ? "dir" : "file";
-    output += "\",\"name\":\"";
-    output += entry.name();
-    output += "\"";
-    output += "}";
-    server.sendContent(output);
-    entry.close();
-  }
-  server.sendContent("]");
-  dir.close();
-}
-
-void handleNotFound() {
-  if (hasSD && loadFromSdCard(server.uri())) return;
-  String message = "PLIKU NIE ZNALEZIONO\n\n";
-  message += "URI: ";
-  message += server.uri();
-  message += "\nMethod: ";
-  message += (server.method() == HTTP_GET) ? "GET" : "POST";
-  message += "\nArguments: ";
-  message += server.args();
-  message += "\n";
-  for (uint8_t i = 0; i < server.args(); i++) {
-    message += " NAME:" + server.argName(i) + "\n VALUE:" + server.arg(i) + "\n";
-  }
-  server.send(404, "text/plain", message);
-  Serial.print(message);
-}
-
-String printDateTime(const RtcDateTime & dt, bool tofile) {
-  char datestring[20];
-  if (!tofile) {
-    snprintf_P(datestring,
-               countof(datestring),
-               PSTR("%02u/%02u/%04u %02u:%02u:%02u"),
-               dt.Day(),
-               dt.Month(),
-               dt.Year(),
-               dt.Hour(),
-               dt.Minute(),
-               dt.Second() );
-  } else if (tofile) {
-    snprintf_P(datestring,
-               countof(datestring),
-               PSTR("%02u/%02u/%04u;%02u:%02u"),
-               dt.Day(),
-               dt.Month(),
-               dt.Year(),
-               dt.Hour(),
-               dt.Minute() );
-  }
-  return datestring;
 }

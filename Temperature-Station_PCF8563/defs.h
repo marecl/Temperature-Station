@@ -106,3 +106,18 @@ void setPCF8563(uint32_t t) {
   Wire.write(decToBcd(r)); //rok-2000
   Wire.endTransmission();
 }
+
+IPAddress stringToIP(String input) {
+  int parts[4] = {0, 0, 0, 0};
+  int part = 0;
+  for (int a = 0; a < input.length(); a++) {
+    char b = input[a];
+    if (b == '.') {
+      part++;
+      continue;
+    }
+    parts[part] *= 10;
+    parts[part] += b - '0';
+  }
+  return IPAddress(parts[0], parts[1], parts[2], parts[3]);
+}

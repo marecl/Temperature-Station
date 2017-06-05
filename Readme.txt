@@ -20,7 +20,7 @@ void loop():
 Folder SDfiles
 	Copy everything to the root od SDcard
 	Enter data to PASS.TXT
-	Change settings in IP_SET.TXT
+	Change settings in IP_SET.TXT 
 
 IP_SET:
 	mode=[static/dhcp]
