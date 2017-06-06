@@ -11,7 +11,6 @@
 #include "defs.h"
 /*
   Add authentication
-  Fix server and client side reactions (upload/download/delete etc)
 
   Automatic daylight saving
 
@@ -34,9 +33,14 @@ void setup(void) {
   sensors.begin();
   Wire.begin(D1, D2);
   if (!digitalRead(SD_D)) {
-    hasSD = true;
-    if (SD.begin(SD_CS))
+    if (SD.begin(SD_CS)) {
       Serial.println("SD Card initialized.");
+      hasSD = true;
+    }
+    else {
+      Serial.println("SD Card present but cannot be initialized!");
+      hasSD = false;
+    }
     if (SD.exists(CONFIGFILE)) {
       if (wifiConn())
         httpserver = true;
@@ -63,9 +67,9 @@ void setup(void) {
 
   if (httpserver) {
     server.on("/list", HTTP_GET, printDirectory);
-    server.on("/edit", HTTP_DELETE, handleDelete);
-    server.on("/edit", HTTP_PUT, handleCreate);
-    server.on("/edit", HTTP_POST, []() {
+    server.on("/", HTTP_DELETE, handleDelete);
+    server.on("/", HTTP_PUT, handleCreate);
+    server.on("/", HTTP_POST, []() {
       returnOK();
     }, handleFileUpload);
     server.on("/pass.pwd", returnForbidden);
@@ -90,8 +94,6 @@ void setup(void) {
       unsigned long secsSince1900 = highWord << 16 | lowWord;
       const unsigned long seventyYears = 2208988800UL;
       unsigned long epoch = secsSince1900 - seventyYears;
-      epoch += 3600; //UTC +1
-      if (letni) epoch += 3600; //Czas letni
       setPCF8563(epoch);
     }
   }
@@ -224,7 +226,6 @@ void updatetime() {
     const unsigned long seventyYears = 2208988800UL;
     unsigned long epoch = secsSince1900 - seventyYears;
     epoch += 3600; //UTC +1
-    if (letni) epoch += 3600;
     setPCF8563(epoch);
   }
 }
@@ -499,7 +500,6 @@ void deleteRecursive(String path) {
 void handleDelete() {
   if (server.args() == 0) return returnFail("BAD ARGS");
   String path = server.arg(0);
-  Serial.println(path);
   if (path == "/" || !SD.exists((char *)path.c_str())) {
     returnFail("BAD PATH");
     return;

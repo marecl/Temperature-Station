@@ -12,6 +12,7 @@
 #define IPSETFILE "IP_SET.TXT"
 #define DHCPFILE "DHCP.TXT"
 #define NTPSERV "tempus1.gum.gov.pl"
+#define _TIMEZONE_ 1 //UTC +1
 
 #define _temp1_ pokoj
 #define _temp2_ nadworze
@@ -25,6 +26,8 @@ byte _temp4_[8] = {0x28, 0xFF, 0xB0, 0xDC, 0x33, 0x16, 0x03, 0x8A};
 static bool hasSD = false;
 static bool httpserver = false;
 
+bool letni = true;
+
 bool dhcp = false;
 bool gotip = false;
 bool gotgate = false;
@@ -32,7 +35,6 @@ bool gotsub = false;
 String sip = "";
 String sgate = "";
 String ssub = "";
-bool letni = true;
 
 const char* ntpServerName = NTPSERV;
 const int NTP_PACKET_SIZE = 48;
@@ -70,6 +72,8 @@ void readPCF8563() {
 
 void setPCF8563(uint32_t t) {
   t -= 946684800UL;
+  t = t + (3600 * _TIMEZONE_);
+  if (letni) t += 3600; //Czas letni
   uint8_t ss = t % 60;
   t /= 60;
   uint8_t mm = t % 60;

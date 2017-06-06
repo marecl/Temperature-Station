@@ -69,9 +69,9 @@ void setup(void) {
 
   if (httpserver) {
     server.on("/list", HTTP_GET, printDirectory);
-    server.on("/edit", HTTP_DELETE, handleDelete);
-    server.on("/edit", HTTP_PUT, handleCreate);
-    server.on("/edit", HTTP_POST, []() {
+    server.on("/", HTTP_DELETE, handleDelete);
+    server.on("/", HTTP_PUT, handleCreate);
+    server.on("/", HTTP_POST, []() {
       returnOK();
     }, handleFileUpload);
     server.on("/pass.txt", returnForbidden);

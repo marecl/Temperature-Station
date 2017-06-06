@@ -435,10 +435,10 @@
           for(var i = 0; i < ll; i++){
             var item = items[i];
             var itemEl;
-            if(item.type === "file" && !item.name.includes(".pwd")){
-				itemEl = createTreeLeaf(path, item.name, item.size);
-			} else {
-				itemEl = createTreeBranch(path, item.name);
+            if(item.type === "file"){
+              itemEl = createTreeLeaf(path, item.name, item.size);
+            } else {
+              itemEl = createTreeBranch(path, item.name);
             }
             list.appendChild(itemEl);
           }
@@ -459,7 +459,6 @@
               case "cpp":
               case "css":
               case "xml":
-			  case "csv":
                 return true;
             }
           }
@@ -566,7 +565,8 @@
           }
           return lang;
         }
-		var dateObj = new Date();
+  
+        var dateObj = new Date();
 		var month = dateObj.getUTCMonth() + 1; //months from 1-12
 		if(month < 10) month = "0" + month;
 		var day = dateObj.getUTCDate();

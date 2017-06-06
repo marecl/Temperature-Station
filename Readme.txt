@@ -31,6 +31,8 @@ Please note everything must be correct, there are no validation mechanisms yet!
 After selecting dhcp mode it will create file DHCP.TXT which will contain obtained IP address and so on.
 	
 DS3231 version is going to be updated much later but works fine.
+
+If there is Error[500] use another browser (this dosen't work with Edge)
 	
 		!!!TODO!!!
 
@@ -38,7 +40,6 @@ DS3231 version is going to be updated much later but works fine.
 	2. Hide important files
 	3. WWW based updater
 	4. Automatic daylight saving
-	5. Repair edition, upload, removing etc 
 	6. Update DS3231 version to newest sketch
 
 
