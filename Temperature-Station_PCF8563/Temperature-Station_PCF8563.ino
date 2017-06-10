@@ -11,6 +11,7 @@
 #include "defs.h"
 /*
   Add authentication
+    !Enable SSL encryption
 
   Automatic daylight saving
 
@@ -31,6 +32,7 @@ void setup(void) {
   Serial.setDebugOutput(false);
   Serial.print("\n");
   sensors.begin();
+
   Wire.begin(D1, D2);
   if (!digitalRead(SD_D)) {
     if (SD.begin(SD_CS)) {
@@ -64,7 +66,9 @@ void setup(void) {
     delay(1000);
     ESP.restart();
   }
-
+  if (hasSD) {
+    if (SD.exists(TEMPLATE)) usetemplate = true;
+  }
   if (httpserver) {
     server.on("/list", HTTP_GET, printDirectory);
     server.on("/", HTTP_DELETE, handleDelete);
@@ -72,7 +76,8 @@ void setup(void) {
     server.on("/", HTTP_POST, []() {
       returnOK();
     }, handleFileUpload);
-    server.on("/pass.pwd", returnForbidden);
+    server.on("/pass.pwd", HTTP_GET, returnForbidden);
+    server.on("/pass.pwd", HTTP_POST, returnForbidden);
     server.onNotFound(handleNotFound);
     server.begin();
     Serial.println("HTTP server started");
@@ -127,6 +132,9 @@ void loop() {
     }
   }
   sensors.requestTemperatures();
+  for (int a = 0; a < 4; a++) {
+
+  }
   _t1_ = round(10 * sensors.getTempC(_temp1_));
   _t1_ /= 10;
   _t2_ = round(10 * sensors.getTempC(_temp2_));
@@ -205,9 +213,7 @@ void createfile() {
   strcpy(path2, path.c_str());
   File dest = SD.open(path2, FILE_WRITE);
   if (dest.size() < 10) {
-    dest.print("Data;Godzina;Wewnatrz;");
-    dest.flush();
-    dest.print("Zewnatrz;PiecWyjscie;PiecPowrot\n");
+    dest.print("Date;Time;A;B;C;D\n");
     dest.flush();
     dest.close();
   }
@@ -415,6 +421,7 @@ void returnForbidden() {
   output += "<h1>403 FORBIDDEN</h1>\r\n";
   output += "</html>";
   server.send(403, "text/html", output);
+  Serial.println("Somebody tried to access password file!");
 }
 
 bool loadFromSdCard(String path) {
