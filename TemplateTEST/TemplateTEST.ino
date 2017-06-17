@@ -39,7 +39,7 @@ void setup() {
       }
       //Serial.println(tmpN + ",");
       int zxc = 0;
-      for (int a = 1; a > -1; a--) {
+      for (int a = 0; a <= 1; a++) {
         switch (tmpN[a]) {
           case '0': zxc = 0; break;
           case '1': zxc = 1; break;
@@ -58,7 +58,7 @@ void setup() {
           case 'E': zxc = 14; break;
           case 'F': zxc = 15; break;
         }
-        _templ1_[b] += pow(zxc, a);
+        _templ1_[b] += (zxc * pow(16, map(a, 0, 1, 1, 0)));
       }
       Serial.print("0x");
       Serial.println(_templ1_[b], HEX);
