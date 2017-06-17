@@ -11,6 +11,7 @@
 #define CONFIGFILE "PASS.PWD"
 #define IPSETFILE "IP_SET.TXT"
 #define DHCPFILE "DHCP.TXT"
+#define TEMPLATE "TEMPLATE.TXT"
 #define NTPSERV "tempus1.gum.gov.pl"
 #define _TIMEZONE_ 1 //UTC +1
 
@@ -44,6 +45,7 @@ unsigned int localPort = 2390;
 
 double _t1_ = 0, _t2_ = 0, _t3_ = 0, _t4_ = 0;
 String workfile = "TEMP.CSV";
+bool usetemplate = false;
 
 const uint8_t daysInMonth [] PROGMEM = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 int czas[7]; //sek,min,godz, dzmsc,dztyg,msc,rok
