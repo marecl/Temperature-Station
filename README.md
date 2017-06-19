@@ -1,16 +1,16 @@
 #Temperature Station  
 ##I made this project for my father who needed to log central heating activity  
 
-Definitions:
+Definitions:  
 	* CONFIGFILE [name] - file with WiFi authentication credientals  
-	* IPSETFILE [name] - IP obtaining settings  
+	* IPSETFILE [name] - IP obtaining settings    
 	* TEMPLATE [name] - File containing sensor names and addresses  
 	* NTPSERV [address] - NTP server address. IP or name. Can not be server pool  
 	* MAX_SENSORS [number] - how many sensors can be connected (currently set to 16)  
 
 Every temperature log can be found by /archiwum/YYYYMM/DD.csv  
 
-Folder SDfiles  
+Folder SDfiles:  
 	Copy everything to the root od SDcard  
 	Enter data to PASS.TXT  
 	Change settings in IP_SET.TXT  

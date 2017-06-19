@@ -4,10 +4,10 @@ Please do NOT:
 	* Share modified source code and/or other files to other repositories  
 	* Mirror project files without license (this file)  
 	
-If You want to:
+If You want to:  
 	* Contribute  
 	* Ask some questions  
-	* Donate
-Just mail me: fotelpl@gmail.com
+	* Donate  
+Just mail me: fotelpl@gmail.com  
 
-Marek Ledworowski 2017
+Marek Ledworowski 2017  
