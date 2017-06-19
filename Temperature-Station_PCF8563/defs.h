@@ -5,7 +5,7 @@
 #define SD_CS D4
 #define rtcadd 0x51
 #define READ_COND (tmp != '\r' && tmp != '\n' && tmp != 255 && tmp != '=')
-#define READ_COND2 (tmp == '\r' && tmp == '\n' && tmp == 255 && tmp == '\t' && tmp =='\0')
+#define READ_COND2 (tmp == '\r' || tmp == '\n' || tmp == '\t' || tmp == 0)
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
 #define CONFIGFILE "PASS.PWD"
@@ -15,10 +15,7 @@
 #define NTPSERV "tempus1.gum.gov.pl"
 #define _TIMEZONE_ 1 //UTC +1
 
-#define _temp1_ pokoj
-#define _temp2_ nadworze
-#define _temp3_ piec_wyjscie
-#define _temp4_ piec_powrot
+#define MAX_SENSORS 16
 byte _temp1_[8] = {0x28, 0xFF, 0x3B, 0xBD, 0x72, 0x16, 0x05, 0x69};
 byte _temp2_[8] = {0x28, 0xA5, 0xE2, 0x27, 0x00, 0x00, 0x80, 0x8A};
 byte _temp3_[8] = {0x28, 0xFF, 0xE2, 0x33, 0x34, 0x16, 0x04, 0xB6};
@@ -43,12 +40,17 @@ byte packetBuffer[NTP_PACKET_SIZE];
 
 unsigned int localPort = 2390;
 
-double _t1_ = 0, _t2_ = 0, _t3_ = 0, _t4_ = 0;
 String workfile = "TEMP.CSV";
+
 bool usetemplate = false;
+int valid_sensors = 0;
+byte _templa_[MAX_SENSORS][8];
+double _temps_[MAX_SENSORS];
+String sensor_names[MAX_SENSORS];
 
 const uint8_t daysInMonth [] PROGMEM = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 int czas[7]; //sek,min,godz, dzmsc,dztyg,msc,rok
+
 byte bcdToDec(byte value) {
   return ((value / 16) * 10 + value % 16);
 }

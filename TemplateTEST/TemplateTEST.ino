@@ -97,8 +97,21 @@ void setup() {
   File root = SD.open("/TEMPHEAD.TXT", FILE_WRITE);
   root.println(fileheader);
   root.flush();
+  for (int c = 0; c < valid_sensors; c++) {
+    root.print(getTemp(c));
+    if (valid_sensors - c > 1) root.print(";");
+    root.flush();
+  }
   root.close();
 
+}
+
+double getTemp(int row) {
+  byte tmp[8];
+  for (int a = 0; a < 8; a++)
+    tmp[a] = _templa_[a][row];
+  sensors.requestTemperatures();
+  return sensors.getTempC(tmp);
 }
 
 void loop() {

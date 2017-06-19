@@ -16,6 +16,8 @@
   Automatic daylight saving
 
   Hide important files (*.pwd and so on)
+
+  One JSON instead of many configs
 */
 
 IPAddress timeServerIP;
@@ -66,9 +68,9 @@ void setup(void) {
     delay(1000);
     ESP.restart();
   }
-  if (hasSD) {
-    if (SD.exists(TEMPLATE)) usetemplate = true;
-  }
+  if (hasSD && SD.exists(TEMPLATE))
+    usetemplate = true;
+
   if (httpserver) {
     server.on("/list", HTTP_GET, printDirectory);
     server.on("/", HTTP_DELETE, handleDelete);
@@ -107,8 +109,9 @@ void setup(void) {
   Wire.write(0x00);
   Wire.endTransmission();
   readPCF8563();
-  createfile();
   Serial.println(printDateTime());
+  createtemplate();
+  createfile();
 }
 
 void loop() {
@@ -132,17 +135,11 @@ void loop() {
     }
   }
   sensors.requestTemperatures();
-  for (int a = 0; a < 4; a++) {
-
+  for (int c = 0; c < valid_sensors; c++) {
+    _temps_[c] = getTemp(c);
+    _temps_[c] = round(10 * _temps_[c]);
+    _temps_[c] /= 10;
   }
-  _t1_ = round(10 * sensors.getTempC(_temp1_));
-  _t1_ /= 10;
-  _t2_ = round(10 * sensors.getTempC(_temp2_));
-  _t2_ /= 10;
-  _t3_ = round(10 * sensors.getTempC(_temp3_));
-  _t3_ /= 10;
-  _t4_ = round(10 * sensors.getTempC(_temp4_));
-  _t4_ /= 10;
 
   if (hasSD) {
     //updatetime();
@@ -159,26 +156,19 @@ void loop() {
       readPCF8563();
       root.print(printDateTime() + ";");
       root.flush();
-      root.print(_t1_, 1);
-      root.print(";");
-      root.print(_t2_, 1);
-      root.print(";");
-      root.print(_t3_, 1);
-      root.print(";");
-      root.print(_t4_, 1);
-      root.print("\r\n");
+      for (int c = 0; c < valid_sensors; c++) {
+        root.print(_temps_[c], 1);
+        if (valid_sensors - c > 1) root.print(";");
+        else root.print("\r\n");
+        root.flush();
+      }
       root.flush();
       root.close();
-      Serial.print("Temperatura (");
-      Serial.print(printDateTime());
-      Serial.print("):\n\tWewnatrz: ");
-      Serial.println(_t1_);
-      Serial.print("\tNa zewnatrz: ");
-      Serial.println(_t2_);
-      Serial.print("\tWyjscie pieca: ");
-      Serial.println(_t3_);
-      Serial.print("\tPowrot pieca: ");
-      Serial.println(_t4_);
+      Serial.println(printDateTime() + ":");
+      for (int c = 0; c < valid_sensors; c++) {
+        Serial.print("\t" + sensor_names[c] + ": ");
+        Serial.println(_temps_[c]);
+      }
     }
   }
   while (czas[1] % 5 == 0) {
@@ -212,12 +202,17 @@ void createfile() {
   path2 = new char[path.length() + 1];
   strcpy(path2, path.c_str());
   File dest = SD.open(path2, FILE_WRITE);
-  if (dest.size() < 10) {
-    dest.print("Date;Time;A;B;C;D\n");
+
+  dest.print("Date;Time;");
+  dest.flush();
+  for (int c = 0; c < valid_sensors; c++) {
+    dest.print(sensor_names[c]);
+    if (valid_sensors - c > 1) dest.print(";");
+    else dest.print("\r\n");
     dest.flush();
-    dest.close();
   }
   workfile = path;
+  dest.close();
 }
 
 void updatetime() {
@@ -602,3 +597,72 @@ String printDateTime() {
              czas[1] );
   return datestring;
 }
+
+void createtemplate() {
+  File root = SD.open(TEMPLATE, FILE_READ);
+  char tmp = root.read();
+  String tmpN = "";
+  int v = 0;
+  Serial.println("\r\nSensor list:");
+  while (root.peek() != -1 && valid_sensors < MAX_SENSORS) {
+    while (READ_COND) {
+      tmpN += tmp;
+      tmp = root.read();
+    }
+    sensor_names[v] = tmpN;
+
+    Serial.print((String)(v + 1) + "/" + (String)MAX_SENSORS + ": ");
+    Serial.print(tmpN + " (");
+
+    tmpN = "";
+    for (int b = 0; b < 8; b++) {
+      for (int a = 0; a < 2; a++) {
+        tmp = root.read();
+        tmpN += tmp;
+      }
+      int zxc = 0;
+      for (int a = 0; a <= 1; a++) {
+        switch (tmpN[a]) {
+          case '0': zxc += 0 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case '1': zxc += 1 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case '2': zxc += 2 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case '3': zxc += 3 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case '4': zxc += 4 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case '5': zxc += 5 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case '6': zxc += 6 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case '7': zxc += 7 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case '8': zxc += 8 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case '9': zxc += 9 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case 'A': zxc += 10 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case 'B': zxc += 11 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case 'C': zxc += 12 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case 'D': zxc += 13 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case 'E': zxc += 14 * pow(16, map(a, 0, 1, 1, 0)); break;
+          case 'F': zxc += 15 * pow(16, map(a, 0, 1, 1, 0)); break;
+        }
+        _templa_[b][v] = zxc;
+      }
+      tmpN = "";
+
+      if (_templa_[b][v] < 10) Serial.print('0');
+      Serial.print(_templa_[b][v], HEX);
+
+    }
+    Serial.println(")");
+    tmp = root.read();
+    while (READ_COND2) tmp = root.read();
+    tmpN = "";
+    v++;
+    valid_sensors = v;
+  }
+  root.close();
+  fileheader.remove(fileheader.length() - 1);
+}
+
+double getTemp(int row) {
+  byte tmp[8];
+  for (int a = 0; a < 8; a++)
+    tmp[a] = _templa_[a][row];
+  return sensors.getTempC(tmp);
+}
+
