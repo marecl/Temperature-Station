@@ -10,14 +10,9 @@
 #include <pgmspace.h>
 #include "defs.h"
 /*
-  Add authentication
-    !Enable SSL encryption
-
-  Automatic daylight saving
-
-  Hide important files (*.pwd and so on)
-
-  One JSON instead of many configs
+  I'm going to experiment with JSON on this file
+  Dont get too comfy with this file
+  It's going to fcuk up all String related stuff
 */
 
 IPAddress timeServerIP;
@@ -201,21 +196,18 @@ void createfile() {
   else path += (String)czas[3] + ".csv";
   path2 = new char[path.length() + 1];
   strcpy(path2, path.c_str());
-  if (!SD.exists(path2)) {
-    File dest = SD.open(path2, FILE_WRITE);
+  File dest = SD.open(path2, FILE_WRITE);
 
-    dest.print("Date;Time;");
+  dest.print("Date;Time;");
+  dest.flush();
+  for (int c = 0; c < valid_sensors; c++) {
+    dest.print(sensor_names[c]);
+    if (valid_sensors - c > 1) dest.print(";");
+    else dest.print("\r\n");
     dest.flush();
-    for (int c = 0; c < valid_sensors; c++) {
-      dest.print(sensor_names[c]);
-      if (valid_sensors - c > 1) dest.print(";");
-      else dest.print("\r\n");
-      dest.flush();
-    }
-    workfile = path;
-    dest.close();
   }
-  delete [] path2;
+  workfile = path;
+  dest.close();
 }
 
 void updatetime() {
@@ -659,6 +651,7 @@ void createtemplate() {
     valid_sensors = v;
   }
   root.close();
+  fileheader.remove(fileheader.length() - 1);
 }
 
 double getTemp(int row) {

@@ -4,12 +4,14 @@
 #include <SPI.h>
 #include <SD.h>
 #include <pgmspace.h>
-#define CONFIGFILE "PASS.PWD"
 #define IPSETFILE "IP_SET.TXT"
 #define DHCPFILE "DHCP.TXT"
 #define SD_CS D4
 #define READ_COND (tmp != '\r' && tmp != '\n' && tmp != 255 && tmp != '=')
 #define READ_COND2 (tmp == '\r' && tmp == '\n' && tmp == 255 && tmp == '\t' && tmp =='\0')
+char* ssid = "....";
+char* password = "....";
+
 File uploadFile;
 bool dhcp = false;
 bool gotip = false;
@@ -24,7 +26,14 @@ void setup() {
   if (SD.begin(SD_CS))
     Serial.println("SD Card initialized.");
   else Serial.println("Brak Karty");
-
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  // Wait for connection
+  uint8_t i = 0;
+  while (WiFi.status() != WL_CONNECTED && i++ < 20) {//wait 10 seconds
+    delay(500);
+  }
   if (wifiConn()) {
     Serial.println("TAK");
     Serial.println(WiFi.localIP());
@@ -61,11 +70,7 @@ IPAddress stringToIP(String input) {
   return IPAddress(parts[0], parts[1], parts[2], parts[3]);
 }
 
-void loop() {
-
-}
-
-bool wifiConn () {
+bool wifiConn() {
   uploadFile = SD.open(IPSETFILE, FILE_READ);
   char tmp = uploadFile.read();
   String tmpS = "";
@@ -74,7 +79,6 @@ bool wifiConn () {
       tmpS += tmp;
       tmp = uploadFile.read();
     }
-
     if (tmpS == "mode") {
       Serial.print("tryb: ");
       tmpS = "";
@@ -92,7 +96,6 @@ bool wifiConn () {
         dhcp = false;
       }
     }
-
     if (tmpS == "ip") {
       Serial.print("ip: ");
       tmpS = "";
@@ -105,6 +108,7 @@ bool wifiConn () {
       sip = tmpS;
       gotip = true;
     }
+
     if (tmpS == "gateway") {
       Serial.print("gateway: ");
       tmpS = "";
@@ -117,6 +121,7 @@ bool wifiConn () {
       sgate = tmpS;
       gotgate = true;
     }
+
     if (tmpS == "subnet") {
       Serial.print("subnet: ");
       tmpS = "";
@@ -137,72 +142,20 @@ bool wifiConn () {
   sip.trim();
   sgate.trim();
   ssub.trim();
-
-  tmp = 1;
-  tmpS = "";
-
-  uploadFile = SD.open("PASS.PWD", FILE_READ);
-  tmp = uploadFile.read();
-  tmpS = "";
-  while (READ_COND) {
-    tmpS += tmp;
-    tmp = uploadFile.read();
-  }
-  if (tmpS == "ssid") {
-    tmpS = "";
-    tmp = uploadFile.read();
-    while (READ_COND) {
-      tmpS += tmp;
-      tmp = uploadFile.read();
-    }
-  } else {
-    Serial.print("FORMAT:\n");
-    Serial.print("ssid=[SSID]\n");
-    Serial.print("pass=[PASSWORD]\n");
-    return false;
-  }
-  char *ssid = new char[tmpS.length() + 1];
-  strcpy(ssid, tmpS.c_str());
-  tmpS = "";
-
-  tmp = uploadFile.read();
-  while (tmp == '\r' || tmp == '\n' || tmp == '\t' || tmp == '=' )
-    tmp = uploadFile.read();
-  while (READ_COND) {
-    tmpS += tmp;
-    tmp = uploadFile.read();
-  }
-  if (tmpS == "pass") {
-    tmpS = "";
-    tmp = uploadFile.read();
-    while (READ_COND) {
-      tmpS += tmp;
-      tmp = uploadFile.read();
-    }
-  } else {
-    Serial.print("FORMAT:\n");
-    Serial.print("ssid=[SSID]\n");
-    Serial.print("pass=[PASSWORD]\n");
-    return false;
-  }
-  char *password = new char[tmpS.length() + 1];
-  strcpy(password, tmpS.c_str());
-  tmpS = "";
-  uploadFile.close();
-
-  //Serial.println(ssid);
-  //Serial.println(password);
-
   if (!dhcp) WiFi.config(stringToIP(sip), stringToIP(sgate), stringToIP(ssub));
   WiFi.begin(ssid, password);
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-  // Wait for connection
+  
   uint8_t i = 0;
   while (WiFi.status() != WL_CONNECTED && i++ < 20) {//wait 10 seconds
     delay(500);
   }
   if (i >= 21 && WiFi.status() != WL_CONNECTED)
-    return false;
-  return true;
+    if (i >= 21 && WiFi.status() != WL_CONNECTED)
+      return false;
+    else return true;
 }
+
+void loop() {
+
+}
+

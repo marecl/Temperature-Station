@@ -1,0 +1,24 @@
+{
+	"sensor_address": [
+		"28FF3BBD72160569",
+		"28A5E2270000808A",
+		"28FFE233341604B6",
+		"28FFB0DC3316038A"
+	],
+	"sensor_name": [
+		"Wewnatrz",
+		"Zewnatrz",
+		"PiecWyjscie",
+		"PiecPowrot"
+	],
+	"ipsettings": {
+		"mode": "dhcp",
+		"ip": "192.168.2.98",
+		"gateway": "192.168.2.1",
+		"subnet": "255.255.255.0"
+	},
+	"wlansettings": {
+		"ssid": "test",
+		"pass": "test"
+	}
+}

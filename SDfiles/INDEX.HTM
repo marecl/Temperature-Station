@@ -196,7 +196,7 @@
           xmlHttp.onreadystatechange = httpPostProcessRequest;
           var formData = new FormData();
           formData.append("path", p);
-          xmlHttp.open("PUT", "/edit");
+          xmlHttp.open("PUT", "/");
           xmlHttp.send(formData);
         }
         
@@ -222,7 +222,7 @@
           xmlHttp.onreadystatechange = httpPostProcessRequest;
           var formData = new FormData();
           formData.append("data", input.files[0], path.value);
-          xmlHttp.open("POST", "/edit");
+          xmlHttp.open("POST", "/");
           xmlHttp.send(formData);
         }
         input.onchange = function(e){
@@ -518,7 +518,7 @@
           xmlHttp.onreadystatechange = delCb(filename);
           var formData = new FormData();
           formData.append("path", filename);
-          xmlHttp.open("DELETE", "/edit");
+          xmlHttp.open("DELETE", "/");
           xmlHttp.send(formData);
         }
   
@@ -600,7 +600,7 @@
           xmlHttp.onreadystatechange = httpPostProcessRequest;
           var formData = new FormData();
           formData.append("data", new Blob([data], { type: type }), filename);
-          xmlHttp.open("POST", "/edit");
+          xmlHttp.open("POST", "/");
           xmlHttp.send(formData);
         }
         //get
