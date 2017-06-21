@@ -99,8 +99,7 @@ void setup(void) {
       unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
       unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
       unsigned long secsSince1900 = highWord << 16 | lowWord;
-      const unsigned long seventyYears = 2208988800UL;
-      unsigned long epoch = secsSince1900 - seventyYears;
+      unsigned long epoch = secsSince1900 - 2208988800UL;
       setPCF8563(epoch);
     }
   }
@@ -143,16 +142,9 @@ void loop() {
 
   if (hasSD) {
     //updatetime();
-    File root;
-    if (!digitalRead(SD_D) && hasSD)
-      root = SD.open(workfile, FILE_WRITE);
-    else {
-      hasSD = false;
-      httpserver = false;
-      Serial.println("!!! NO SDCARD !!!");
-    }
     delay(150);
-    if (root && hasSD) {
+    if (hasSD && !digitalRead(SD_D)) {
+      File root = SD.open(workfile, FILE_WRITE);
       readPCF8563();
       root.print(printDateTime() + ";");
       root.flush();
@@ -169,6 +161,10 @@ void loop() {
         Serial.print("\t" + sensor_names[c] + ": ");
         Serial.println(_temps_[c]);
       }
+    } else {
+      hasSD = false;
+      httpserver = false;
+      Serial.println("!!! NO SDCARD !!!");
     }
   }
   while (czas[1] % 5 == 0) {
@@ -212,9 +208,9 @@ void createfile() {
       else dest.print("\r\n");
       dest.flush();
     }
-    workfile = path;
     dest.close();
   }
+  workfile = path;
   delete [] path2;
 }
 
@@ -229,7 +225,7 @@ void updatetime() {
     unsigned long secsSince1900 = highWord << 16 | lowWord;
     const unsigned long seventyYears = 2208988800UL;
     unsigned long epoch = secsSince1900 - seventyYears;
-    epoch += 3600; //UTC +1
+    //epoch += 3600; //UTC +1
     setPCF8563(epoch);
   }
 }

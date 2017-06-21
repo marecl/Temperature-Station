@@ -8,31 +8,20 @@
 #define READ_COND2 (tmp == '\r' || tmp == '\n' || tmp == '\t' || tmp == 0)
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
-#define CONFIGFILE "PASS.PWD"
-#define IPSETFILE "IP_SET.TXT"
 #define DHCPFILE "DHCP.TXT"
 #define TEMPLATE "TEMPLATE.TXT"
+#define SETTINGS_FILE "SETTINGS.TXT"
 #define NTPSERV "tempus1.gum.gov.pl"
 #define _TIMEZONE_ 1 //UTC +1
 
 #define MAX_SENSORS 16
-byte _temp1_[8] = {0x28, 0xFF, 0x3B, 0xBD, 0x72, 0x16, 0x05, 0x69};
-byte _temp2_[8] = {0x28, 0xA5, 0xE2, 0x27, 0x00, 0x00, 0x80, 0x8A};
-byte _temp3_[8] = {0x28, 0xFF, 0xE2, 0x33, 0x34, 0x16, 0x04, 0xB6};
-byte _temp4_[8] = {0x28, 0xFF, 0xB0, 0xDC, 0x33, 0x16, 0x03, 0x8A};
 
 static bool hasSD = false;
 static bool httpserver = false;
 
 bool letni = true;
 
-bool dhcp = false;
-bool gotip = false;
-bool gotgate = false;
-bool gotsub = false;
-String sip = "";
-String sgate = "";
-String ssub = "";
+String json = "";
 
 const char* ntpServerName = NTPSERV;
 const int NTP_PACKET_SIZE = 48;
@@ -42,7 +31,6 @@ unsigned int localPort = 2390;
 
 String workfile = "TEMP.CSV";
 
-bool usetemplate = false;
 int valid_sensors = 0;
 byte _templa_[MAX_SENSORS][8];
 double _temps_[MAX_SENSORS];

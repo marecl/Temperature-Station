@@ -1,3 +1,4 @@
+#include <ArduinoJson.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
@@ -10,9 +11,15 @@
 #include <pgmspace.h>
 #include "defs.h"
 /*
-  I'm going to experiment with JSON on this file
-  Dont get too comfy with this file
-  It's going to fcuk up all String related stuff
+  Remake template, createfile and loop to get JsonObject reference.
+  
+  Take everything from JSON directly, so _templa_ and sensor_names can be removed
+  
+  Read JSON directly from SDcard
+  
+  Create PC executable to create JSON file
+    (pc asks to connect one sensor, reads address and gives name
+    then asks for ip settings)
 */
 
 IPAddress timeServerIP;
@@ -38,33 +45,52 @@ void setup(void) {
     }
     else {
       Serial.println("SD Card present but cannot be initialized!");
+      Serial.println("No card - no data logging!");
       hasSD = false;
     }
-    if (SD.exists(CONFIGFILE)) {
-      if (wifiConn())
-        httpserver = true;
-      else {
-        Serial.print("Could not connect to WiFi!\n");
-        Serial.print("Check SSID and PASSWORD and try again\n");
-        Serial.print("Maybe static IP settings are incorrect\n");
-        Serial.print("Log mode only\n");
-        httpserver = false;
-      }
-    } else {
-      Serial.print("File pass.txt dosen't exist!\n");
-      Serial.print("Log mode only\n");
-      httpserver = false;
-    }
-  } else {
-    Serial.print("SDcard not inserted!\n");
+  } else if (!hasSD) {
     Serial.print("I'm supposed to be server, not paperweight!\n");
     Serial.print("Need SDcard.\n");
     Serial.print("Rebooting...\n");
     delay(1000);
     ESP.restart();
   }
-  if (hasSD && SD.exists(TEMPLATE))
-    usetemplate = true;
+
+  if (!SD.exists(SETTINGS_FILE)) {
+    Serial.println("No settings file. Unable to connect to WiFi or log temperature!");
+    Serial.println("Rebooting and waiting for valid SETTINGS.TXT file...");
+    delay(1000);
+    ESP.restart();
+  }
+
+  File root = SD.open(SETTINGS_FILE , FILE_READ);
+  int tmp = root.read();
+  String json = "";
+  while (tmp != -1) {
+    if (tmp != 10 && tmp != 13 && tmp != 32 && tmp != 9)
+      json += (char)tmp;
+    tmp = root.read();
+  }
+  root.close();
+
+  DynamicJsonBuffer jsonBuffer(750);
+  JsonObject& settings = jsonBuffer.parseObject(json);
+  if (!settings.success()) {
+    Serial.println("Invalid JSON file");
+    Serial.println("Come back with valid one. Rebooting...");
+    delay(1000);
+    ESP.restart();
+  }
+
+  if (wifiConn(settings))
+    httpserver = true;
+  else {
+    Serial.print("Could not connect to WiFi!\n");
+    Serial.print("Check SSID and PASSWORD and try again\n");
+    Serial.print("Maybe static IP settings are incorrect\n");
+    Serial.print("Log mode only\n");
+    httpserver = false;
+  }
 
   if (httpserver) {
     server.on("/list", HTTP_GET, printDirectory);
@@ -86,16 +112,15 @@ void setup(void) {
     delay(1000);
     int cb = udp.parsePacket();
     if (!cb)
-      Serial.println("no packet yet");
+      Serial.println("Received invalid NTP data");
     else {
-      Serial.print("packet received, length=");
+      Serial.print("Received valid NTP data");
       Serial.println(cb);
       udp.read(packetBuffer, NTP_PACKET_SIZE);
       unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
       unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
       unsigned long secsSince1900 = highWord << 16 | lowWord;
-      const unsigned long seventyYears = 2208988800UL;
-      unsigned long epoch = secsSince1900 - seventyYears;
+      unsigned long epoch = secsSince1900 - 2208988800UL;
       setPCF8563(epoch);
     }
   }
@@ -105,7 +130,11 @@ void setup(void) {
   Wire.endTransmission();
   readPCF8563();
   Serial.println(printDateTime());
-  createtemplate();
+  //createtemplate();
+
+  valid_sensors = settings["valid_sensors"];
+  Serial.println("\r\nSensor list:");
+  createtemplate(settings);
   createfile();
 }
 
@@ -138,16 +167,9 @@ void loop() {
 
   if (hasSD) {
     //updatetime();
-    File root;
-    if (!digitalRead(SD_D) && hasSD)
-      root = SD.open(workfile, FILE_WRITE);
-    else {
-      hasSD = false;
-      httpserver = false;
-      Serial.println("!!! NO SDCARD !!!");
-    }
     delay(150);
-    if (root && hasSD) {
+    if (hasSD && !digitalRead(SD_D)) {
+      File root = SD.open(workfile, FILE_WRITE);
       readPCF8563();
       root.print(printDateTime() + ";");
       root.flush();
@@ -164,6 +186,10 @@ void loop() {
         Serial.print("\t" + sensor_names[c] + ": ");
         Serial.println(_temps_[c]);
       }
+    } else {
+      hasSD = false;
+      httpserver = false;
+      Serial.println("!!! NO SDCARD !!!");
     }
   }
   while (czas[1] % 5 == 0) {
@@ -196,18 +222,21 @@ void createfile() {
   else path += (String)czas[3] + ".csv";
   path2 = new char[path.length() + 1];
   strcpy(path2, path.c_str());
-  File dest = SD.open(path2, FILE_WRITE);
+  if (!SD.exists(path2)) {
+    File dest = SD.open(path2, FILE_WRITE);
 
-  dest.print("Date;Time;");
-  dest.flush();
-  for (int c = 0; c < valid_sensors; c++) {
-    dest.print(sensor_names[c]);
-    if (valid_sensors - c > 1) dest.print(";");
-    else dest.print("\r\n");
+    dest.print("Date;Time;");
     dest.flush();
+    for (int c = 0; c < valid_sensors; c++) {
+      dest.print(sensor_names[c]);
+      if (valid_sensors - c > 1) dest.print(";");
+      else dest.print("\r\n");
+      dest.flush();
+    }
+    dest.close();
   }
   workfile = path;
-  dest.close();
+  delete [] path2;
 }
 
 void updatetime() {
@@ -221,7 +250,6 @@ void updatetime() {
     unsigned long secsSince1900 = highWord << 16 | lowWord;
     const unsigned long seventyYears = 2208988800UL;
     unsigned long epoch = secsSince1900 - seventyYears;
-    epoch += 3600; //UTC +1
     setPCF8563(epoch);
   }
 }
@@ -249,132 +277,39 @@ unsigned long sendNTPpacket(IPAddress & address) {
   udp.endPacket();
 }
 
-bool wifiConn () {
-  File root = SD.open(IPSETFILE, FILE_READ);
-  char tmp = root.read();
-  String tmpS = "";
-  while (!dhcp && (!gotip || !gotgate || !gotsub)) {
-    while (READ_COND) {
-      tmpS += tmp;
-      tmp = root.read();
-    }
+bool wifiConn (JsonObject &wifiset) {
+  bool dhcp;
+  String tmpdhcp = wifiset["ip"]["mode"]; //Messed up stuff
+  if (tmpdhcp == "dhcp") dhcp = true;     //Idk how to fix it into wifiConn
+  else if (tmpdhcp == "static") dhcp = false;
+  String ip = wifiset["ip"]["ip"];
+  String gate = wifiset["ip"]["gateway"];
+  String sub = wifiset["ip"]["subnet"];
+  String ssid = wifiset["wlan"]["ssid"];
+  String pass = wifiset["wlan"]["pass"];
 
-    if (tmpS == "mode") {
-      tmpS = "";
-      tmp = root.read();
-      while (READ_COND) {
-        tmpS += tmp;
-        tmp = root.read();
-      }
-      if (tmpS == "dhcp")dhcp = true;
-      if (tmpS == "static")dhcp = false;
-    }
-
-    if (tmpS == "ip") {
-      tmpS = "";
-      tmp = root.read();
-      while (READ_COND) {
-        tmpS += tmp;
-        tmp = root.read();
-      }
-      sip = tmpS;
-      gotip = true;
-    }
-    if (tmpS == "gateway") {
-      tmpS = "";
-      tmp = root.read();
-      while (READ_COND) {
-        tmpS += tmp;
-        tmp = root.read();
-      }
-      sgate = tmpS;
-      gotgate = true;
-    }
-    if (tmpS == "subnet") {
-      tmpS = "";
-      tmp = root.read();
-      while (READ_COND) {
-        tmpS += tmp;
-        tmp = root.read();
-      }
-      ssub = tmpS;
-      gotsub = true;
-    }
-    tmp = root.read();
-    while (READ_COND2)tmp = root.read();
-    tmpS = "";
-  }
-  root.close();
-  sip.trim();
-  sgate.trim();
-  ssub.trim();
-
-  tmp = 1;
-  tmpS = "";
-
-  root = SD.open("PASS.PWD", FILE_READ);
-  tmp = root.read();
-  tmpS = "";
-  while (READ_COND) {
-    tmpS += tmp;
-    tmp = root.read();
-  }
-  if (tmpS == "ssid") {
-    tmpS = "";
-    tmp = root.read();
-    while (READ_COND) {
-      tmpS += tmp;
-      tmp = root.read();
-    }
-  } else {
-    Serial.print("FORMAT:\n");
-    Serial.print("ssid=[SSID]\n");
-    Serial.print("pass=[PASSWORD]\n");
-    return false;
-  }
-  char *ssid = new char[tmpS.length() + 1];
-  strcpy(ssid, tmpS.c_str());
-  tmpS = "";
-
-  tmp = root.read();
-  while (tmp == '\r' || tmp == '\n' || tmp == '\t' || tmp == '=' )
-    tmp = root.read();
-  while (READ_COND) {
-    tmpS += tmp;
-    tmp = root.read();
-  }
-  if (tmpS == "pass") {
-    tmpS = "";
-    tmp = root.read();
-    while (READ_COND) {
-      tmpS += tmp;
-      tmp = root.read();
-    }
-  } else {
-    Serial.print("FORMAT:\n");
-    Serial.print("ssid=[SSID]\n");
-    Serial.print("pass=[PASSWORD]\n");
-    return false;
-  }
-  char *password = new char[tmpS.length() + 1];
-  strcpy(password, tmpS.c_str());
-  tmpS = "";
-  root.close();
-
+  char *ssidc = new char[ssid.length() + 1];
+  strcpy(ssidc, ssid.c_str());
+  char *passc = new char[pass.length() + 1];
+  strcpy(passc, pass.c_str());
   //Serial.println(ssid);
   //Serial.println(password);
-
-  if (!dhcp) WiFi.config(stringToIP(sip), stringToIP(sgate), stringToIP(ssub));
-  WiFi.begin(ssid, password);
+  if (!dhcp) WiFi.config(stringToIP(ip), stringToIP(gate), stringToIP(sub));
+  WiFi.begin(ssidc, passc);
   Serial.print("Connecting to ");
-  Serial.println(ssid);
+  Serial.println(ssidc);
+
+  delete[] passc;
+  delete[] ssidc;
   // Wait for connection
   uint8_t i = 0;
+
   while (WiFi.status() != WL_CONNECTED && i++ < 20) {//wait 10 seconds
     delay(500);
   }
-  if (i >= 21 && WiFi.status() != WL_CONNECTED)
-    return false;
+
+  if (i >= 21 && WiFi.status() != WL_CONNECTED) return false;
+
   Serial.print("Connected! \nIP address: ");
   Serial.println(WiFi.localIP());
   Serial.print("Gateway: ");
@@ -386,7 +321,7 @@ bool wifiConn () {
   else Serial.println("Static");
   if (dhcp) {
     if (SD.exists(DHCPFILE)) SD.remove(DHCPFILE); //Zrzut adresu IP
-    root = SD.open(DHCPFILE, FILE_WRITE);
+    File root = SD.open(DHCPFILE, FILE_WRITE);
     root.println("mode=dhcp");
     root.print("ip="); root.println(WiFi.localIP());
     root.flush();
@@ -593,26 +528,18 @@ String printDateTime() {
   return datestring;
 }
 
-void createtemplate() {
-  File root = SD.open(TEMPLATE, FILE_READ);
-  char tmp = root.read();
-  String tmpN = "";
-  int v = 0;
-  Serial.println("\r\nSensor list:");
-  while (root.peek() != -1 && valid_sensors < MAX_SENSORS) {
-    while (READ_COND) {
-      tmpN += tmp;
-      tmp = root.read();
-    }
-    sensor_names[v] = tmpN;
-
-    Serial.print((String)(v + 1) + "/" + (String)MAX_SENSORS + ": ");
-    Serial.print(tmpN + " (");
-
-    tmpN = "";
+void createtemplate(JsonObject &addrset) {
+  for (int x = 0; x < valid_sensors; x++) {
+    String tempname = addrset["sensor_name"][x];
+    sensor_names[x] = tempname;
+    Serial.print((String)(x + 1) + "/" + (String)MAX_SENSORS + ": ");
+    Serial.print(sensor_names[x] + " (");
+    String addr = addrset["sensor_address"][x];
+    char tmp;
+    String tmpN = "";
     for (int b = 0; b < 8; b++) {
       for (int a = 0; a < 2; a++) {
-        tmp = root.read();
+        tmp = addr[b * 2 + a];
         tmpN += tmp;
       }
       int zxc = 0;
@@ -635,23 +562,16 @@ void createtemplate() {
           case 'E': zxc += 14 * pow(16, map(a, 0, 1, 1, 0)); break;
           case 'F': zxc += 15 * pow(16, map(a, 0, 1, 1, 0)); break;
         }
-        _templa_[b][v] = zxc;
+        _templa_[b][x] = zxc;
       }
       tmpN = "";
 
-      if (_templa_[b][v] < 10) Serial.print('0');
-      Serial.print(_templa_[b][v], HEX);
+      if (_templa_[b][x] < 10) Serial.print('0');
+      Serial.print(_templa_[b][x], HEX);
 
     }
     Serial.println(")");
-    tmp = root.read();
-    while (READ_COND2) tmp = root.read();
-    tmpN = "";
-    v++;
-    valid_sensors = v;
   }
-  root.close();
-  fileheader.remove(fileheader.length() - 1);
 }
 
 double getTemp(int row) {
