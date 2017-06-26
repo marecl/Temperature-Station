@@ -459,6 +459,7 @@
               case "cpp":
               case "css":
               case "xml":
+              case "csv":
                 return true;
             }
           }
@@ -560,6 +561,7 @@
               case "html":
               case "json":
               case "xml":
+              case "csv":
                 lang = ext;
             }
           }
@@ -567,12 +569,12 @@
         }
   
         var dateObj = new Date();
-		var month = dateObj.getUTCMonth() + 1; //months from 1-12
+		var month = dateObj.getMonth() + 1; //months from 1-12
 		if(month < 10) month = "0" + month;
-		var day = dateObj.getUTCDate();
+		var day = dateObj.getDate();
 		if(day < 10) day = "0" + day;
-		var year = dateObj.getUTCFullYear();
-		var temppath = "/archiwum/" + year + month  + "/" + day + ".csv"
+		var year = dateObj.getFullYear();
+		var temppath = "/archiwum/" + year + month  + "/" + day + ".csv"; //Remember it takes date and time from client
         if(typeof file === "undefined") file = temppath;
   
         if(typeof lang === "undefined"){

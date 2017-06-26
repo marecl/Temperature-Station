@@ -158,13 +158,8 @@ void loop() {
   while (1) {
     if (zegar.hour == 23 && zegar.minute <= 59 && zegar.second >= 55) {
       zegar.readRTC();
-      delay(2500);
-      delay(2500);
       //ESP.restart();
     }
-    delay(1000);
-    zegar.readRTC();
-    createfile(settings);
     while (zegar.minute % 5 != 0) {
       zegar.readRTC();
       if (httpserver)
@@ -186,12 +181,12 @@ void loop() {
       _temps_[c] = round(10 * _temps_[c]);
       _temps_[c] /= 10;
     }
-
     if (hasSD) {
       delay(150);
       if (hasSD && !digitalRead(SD_D)) {
         File root = SD.open(workfile, FILE_WRITE);
         zegar.readRTC();
+        if (zegar.hour == 0 && zegar.minute == 0) createfile(settings);
         root.print(printDateTime() + ";");
         root.flush();
         for (int c = 0; c < valid_sensors; c++) {
