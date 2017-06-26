@@ -7,16 +7,11 @@
 #include <DallasTemperature.h>
 #include <OneWire.h>
 #include <WiFiUdp.h>
-#include <Wire.h>
-#include <pgmspace.h>
+#include "Czas.h"
 #include "defs.h"
 /*
-  Remake template, createfile and loop to get JsonObject reference.
-  
-  Take everything from JSON directly, so _templa_ and sensor_names can be removed
-  
   Read JSON directly from SDcard
-  
+
   Create PC executable to create JSON file
     (pc asks to connect one sensor, reads address and gives name
     then asks for ip settings)
@@ -31,17 +26,26 @@ File uploadFile;
 OneWire oneWire(OW_PORT);
 DallasTemperature sensors(&oneWire);
 
-void setup(void) {
+DynamicJsonBuffer jsonBuffer(750);
+
+czas zegar(1, SDA, SCL); //PCF8563 address, timezone
+
+void setup() {
   Serial.begin(115200);
   Serial.setDebugOutput(false);
   Serial.print("\n");
   sensors.begin();
 
-  Wire.begin(D1, D2);
   if (!digitalRead(SD_D)) {
     if (SD.begin(SD_CS)) {
       Serial.println("SD Card initialized.");
       hasSD = true;
+      if (!SD.exists(SETTINGS_FILE)) {
+        Serial.println("No settings file. Unable to connect to WiFi or log temperature!");
+        Serial.println("Rebooting and waiting for valid SETTINGS.TXT file...");
+        delay(1000);
+        ESP.restart();
+      }
     }
     else {
       Serial.println("SD Card present but cannot be initialized!");
@@ -56,13 +60,6 @@ void setup(void) {
     ESP.restart();
   }
 
-  if (!SD.exists(SETTINGS_FILE)) {
-    Serial.println("No settings file. Unable to connect to WiFi or log temperature!");
-    Serial.println("Rebooting and waiting for valid SETTINGS.TXT file...");
-    delay(1000);
-    ESP.restart();
-  }
-
   File root = SD.open(SETTINGS_FILE , FILE_READ);
   int tmp = root.read();
   String json = "";
@@ -73,7 +70,6 @@ void setup(void) {
   }
   root.close();
 
-  DynamicJsonBuffer jsonBuffer(750);
   JsonObject& settings = jsonBuffer.parseObject(json);
   if (!settings.success()) {
     Serial.println("Invalid JSON file");
@@ -114,112 +110,139 @@ void setup(void) {
     if (!cb)
       Serial.println("Received invalid NTP data");
     else {
-      Serial.print("Received valid NTP data");
-      Serial.println(cb);
+      Serial.println("Received valid NTP data");
       udp.read(packetBuffer, NTP_PACKET_SIZE);
       unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
       unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
       unsigned long secsSince1900 = highWord << 16 | lowWord;
       unsigned long epoch = secsSince1900 - 2208988800UL;
-      setPCF8563(epoch);
+      zegar.setRTC(epoch);
     }
   }
-  Wire.beginTransmission(0x51);
-  Wire.write(0x0D);
-  Wire.write(0x00);
-  Wire.endTransmission();
-  readPCF8563();
+  zegar.readRTC();
   Serial.println(printDateTime());
   //createtemplate();
 
   valid_sensors = settings["valid_sensors"];
   Serial.println("\r\nSensor list:");
-  createtemplate(settings);
-  createfile();
+  for (int a = 0; a < valid_sensors; a++) {
+    Serial.print((String)(a + 1) + "/" + (String)MAX_SENSORS + ": ");
+    String xdtmp = settings["sensor"][a][0];
+    Serial.print(xdtmp);
+    Serial.print(" (");
+    for (int x = 0; x < 8; x++) {
+      short tee = settings["sensor"][a][x + 1];
+      if (tee < 10) Serial.print("0");
+      Serial.print(tee, HEX);
+    }
+    Serial.print(")\n");
+    getTemp(settings, a);
+  }
+  createfile(settings);
 }
 
 void loop() {
-  if (czas[2] == 23 && czas[1] <= 59 && czas[1] >= 55) {
-    readPCF8563();
-    //ESP.restart();
+  File setfile = SD.open(SETTINGS_FILE , FILE_READ);
+  int tmp = setfile.read();
+  String json = "";
+  while (tmp != -1) {
+    if (tmp != 10 && tmp != 13 && tmp != 32 && tmp != 9)
+      json += (char)tmp;
+    tmp = setfile.read();
   }
-  while (czas[1] % 5 != 0) {
-    readPCF8563();
-    if (httpserver)
-      server.handleClient();
-    if (digitalRead(SD_D) && hasSD) {
-      hasSD = false;
-      httpserver = false;
-      Serial.println("!!! NO SDCARD !!!");
-    }
-    if (!hasSD) {
-      while (digitalRead(SD_D)) delay(1000);
-      Serial.println("SD Card found. Reboot...");
-      ESP.restart();
-    }
-  }
-  sensors.requestTemperatures();
-  for (int c = 0; c < valid_sensors; c++) {
-    _temps_[c] = getTemp(c);
-    _temps_[c] = round(10 * _temps_[c]);
-    _temps_[c] /= 10;
-  }
+  setfile.close();
+  JsonObject& settings = jsonBuffer.parseObject(json);
+  //Okay, JSON loaded so now we can start loop
+  //Uhnfortunately I can't pass object from setup()
 
-  if (hasSD) {
-    //updatetime();
-    delay(150);
-    if (hasSD && !digitalRead(SD_D)) {
-      File root = SD.open(workfile, FILE_WRITE);
-      readPCF8563();
-      root.print(printDateTime() + ";");
-      root.flush();
-      for (int c = 0; c < valid_sensors; c++) {
-        root.print(_temps_[c], 1);
-        if (valid_sensors - c > 1) root.print(";");
-        else root.print("\r\n");
+  while (1) {
+    if (zegar.hour == 23 && zegar.minute <= 59 && zegar.second >= 55) {
+      zegar.readRTC();
+      delay(2500);
+      delay(2500);
+      //ESP.restart();
+    }
+    delay(1000);
+    zegar.readRTC();
+    createfile(settings);
+    while (zegar.minute % 5 != 0) {
+      zegar.readRTC();
+      if (httpserver)
+        server.handleClient();
+      if (digitalRead(SD_D) && hasSD) {
+        hasSD = false;
+        httpserver = false;
+        Serial.println("!!! NO SDCARD !!!");
+      }
+      if (!hasSD) {
+        while (digitalRead(SD_D)) delay(1000);
+        Serial.println("SD Card found. Reboot...");
+        ESP.restart();
+      }
+    }
+    sensors.requestTemperatures();
+    for (int c = 0; c < valid_sensors; c++) {
+      _temps_[c] = getTemp(settings, c);
+      _temps_[c] = round(10 * _temps_[c]);
+      _temps_[c] /= 10;
+    }
+
+    if (hasSD) {
+      delay(150);
+      if (hasSD && !digitalRead(SD_D)) {
+        File root = SD.open(workfile, FILE_WRITE);
+        zegar.readRTC();
+        root.print(printDateTime() + ";");
         root.flush();
+        for (int c = 0; c < valid_sensors; c++) {
+          root.print(_temps_[c], 1);
+          if (valid_sensors - c > 1) root.print(";");
+          else root.print("\r\n");
+          root.flush();
+        }
+        root.flush();
+        root.close();
+        Serial.println(printDateTime() + ":");
+        for (int c = 0; c < valid_sensors; c++) {
+          String tempname = settings["sensor"][c][0];
+          Serial.print("\t" + tempname + ": ");
+          Serial.println(_temps_[c]);
+        }
+      } else {
+        hasSD = false;
+        httpserver = false;
+        Serial.println("!!! NO SDCARD !!!");
       }
-      root.flush();
-      root.close();
-      Serial.println(printDateTime() + ":");
-      for (int c = 0; c < valid_sensors; c++) {
-        Serial.print("\t" + sensor_names[c] + ": ");
-        Serial.println(_temps_[c]);
+    }
+    while (zegar.minute % 5 == 0) {
+      zegar.readRTC();
+      if (httpserver)
+        server.handleClient();
+      if (digitalRead(SD_D) && hasSD) {
+        hasSD = false;
+        httpserver = false;
+        Serial.println("!!! NO SDCARD !!!");
       }
-    } else {
-      hasSD = false;
-      httpserver = false;
-      Serial.println("!!! NO SDCARD !!!");
-    }
-  }
-  while (czas[1] % 5 == 0) {
-    readPCF8563();
-    if (httpserver)
-      server.handleClient();
-    if (digitalRead(SD_D) && hasSD) {
-      hasSD = false;
-      httpserver = false;
-      Serial.println("!!! NO SDCARD !!!");
-    }
-    if (!hasSD) {
-      while (digitalRead(SD_D)) delay(1000);
-      Serial.println("SD Card found. Reboot...");
-      ESP.restart();
+      if (!hasSD) {
+        while (digitalRead(SD_D)) delay(1000);
+        Serial.println("SD Card found. Reboot...");
+        ESP.restart();
+      }
     }
   }
 }
 
-void createfile() {
-  String path = "archiwum/" + (String)czas[6];
-  if (czas[5] < 10) path += "0" + (String)czas[5];
-  else path += (String)czas[5];
+void createfile(JsonObject &nameobj) {
+  String path = "archiwum/" + (String)zegar.year;
+  if (zegar.month < 10) path += "0" + (String)zegar.month;
+  else path += (String)zegar.month;
   char* path2 = new char[path.length() + 1];
   strcpy(path2, path.c_str());
   SD.mkdir(path2);
 
   path += "/";
-  if (czas[3] < 10) path += "0" + (String)czas[3] + ".csv";
-  else path += (String)czas[3] + ".csv";
+  if (zegar.day < 10) path += "0" + (String)zegar.day + ".csv";
+  else path += (String)zegar.day + ".csv";
   path2 = new char[path.length() + 1];
   strcpy(path2, path.c_str());
   if (!SD.exists(path2)) {
@@ -228,7 +251,8 @@ void createfile() {
     dest.print("Date;Time;");
     dest.flush();
     for (int c = 0; c < valid_sensors; c++) {
-      dest.print(sensor_names[c]);
+      String tempname = nameobj["sensor"][c][0];
+      dest.print(tempname);
       if (valid_sensors - c > 1) dest.print(";");
       else dest.print("\r\n");
       dest.flush();
@@ -250,12 +274,12 @@ void updatetime() {
     unsigned long secsSince1900 = highWord << 16 | lowWord;
     const unsigned long seventyYears = 2208988800UL;
     unsigned long epoch = secsSince1900 - seventyYears;
-    setPCF8563(epoch);
+    zegar.setRTC(epoch);
   }
 }
 
 unsigned long sendNTPpacket(IPAddress & address) {
-  Serial.println("sending NTP packet...");
+  Serial.println("Sending NTP packet...");
   // set all bytes in the buffer to 0
   memset(packetBuffer, 0, NTP_PACKET_SIZE);
   // Initialize values needed to form NTP request
@@ -520,64 +544,21 @@ String printDateTime() {
   snprintf_P(datestring,
              countof(datestring),
              PSTR("%02u/%02u/%04u;%02u:%02u"),
-             czas[3],
-             czas[5],
-             czas[6],
-             czas[2],
-             czas[1] );
+             zegar.day,
+             zegar.month,
+             zegar.year,
+             zegar.hour,
+             zegar.minute );
   return datestring;
 }
 
-void createtemplate(JsonObject &addrset) {
-  for (int x = 0; x < valid_sensors; x++) {
-    String tempname = addrset["sensor_name"][x];
-    sensor_names[x] = tempname;
-    Serial.print((String)(x + 1) + "/" + (String)MAX_SENSORS + ": ");
-    Serial.print(sensor_names[x] + " (");
-    String addr = addrset["sensor_address"][x];
-    char tmp;
-    String tmpN = "";
-    for (int b = 0; b < 8; b++) {
-      for (int a = 0; a < 2; a++) {
-        tmp = addr[b * 2 + a];
-        tmpN += tmp;
-      }
-      int zxc = 0;
-      for (int a = 0; a <= 1; a++) {
-        switch (tmpN[a]) {
-          case '0': zxc += 0 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case '1': zxc += 1 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case '2': zxc += 2 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case '3': zxc += 3 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case '4': zxc += 4 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case '5': zxc += 5 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case '6': zxc += 6 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case '7': zxc += 7 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case '8': zxc += 8 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case '9': zxc += 9 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case 'A': zxc += 10 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case 'B': zxc += 11 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case 'C': zxc += 12 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case 'D': zxc += 13 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case 'E': zxc += 14 * pow(16, map(a, 0, 1, 1, 0)); break;
-          case 'F': zxc += 15 * pow(16, map(a, 0, 1, 1, 0)); break;
-        }
-        _templa_[b][x] = zxc;
-      }
-      tmpN = "";
+double getTemp(JsonObject &addrset, int row) {
+  byte tempaddr[8];
+  for (int b = 0; b < 8; b++)
+    tempaddr[b] = addrset["sensor"][row][b + 1];
 
-      if (_templa_[b][x] < 10) Serial.print('0');
-      Serial.print(_templa_[b][x], HEX);
-
-    }
-    Serial.println(")");
-  }
+  //if (tempaddr[b] < 10) Serial.print("0");
+  //Serial.print(tempaddr[b], HEX);
+  //Serial.println();
+  return sensors.getTempC(tempaddr);
 }
-
-double getTemp(int row) {
-  byte tmp[8];
-  for (int a = 0; a < 8; a++)
-    tmp[a] = _templa_[a][row];
-  return sensors.getTempC(tmp);
-}
-

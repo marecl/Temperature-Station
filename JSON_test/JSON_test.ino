@@ -31,7 +31,7 @@ void setup() {
     Serial.println("parseObject() failed");
     return;
   }
-  String ext = settings["sensor_address"][1];
+  String ext = settings["sensor_name"][1][0];
   Serial.println(ext);
 }
 

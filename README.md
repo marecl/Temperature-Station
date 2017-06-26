@@ -14,13 +14,23 @@ Folder SDfiles:
 	Copy everything to the root od SDcard  
 	Enter data to PASS.TXT  
 	Change settings in IP_SET.TXT  
+	Some sketches may not support everything yet, I'm going to update them. Someday.  
 
 IP_SET:  
 	mode=[static/dhcp]  
 	ip=[ip]  
 	gateway=[gateway]  
 	subnet=[subnet]  
-
+  
+SETTINGS.TXT:  
+	"sensor": this object stores sensor name and address. Address stored as decimal!  
+			["sensor"][sensor number][0] - sensor name  
+			["sensor"][sensor number][1-8] - sensor address  
+	"valid_sensors": how many sensors are set (above)  
+	"ip": (as in IP_SET but everything in quotes (""))  
+	"wlan": (as in PASS.PWD, but again, everything in quotes (""))  
+I'm going to make website to set up sensors. Maybe IP and WLAN settings too.  
+	
 TEMPLATE.TXT  
 	[NAME]=[full DS18B20 address]  
 Remember system reads first MAX_SENSORS rows.  
@@ -35,6 +45,7 @@ After selecting dhcp mode it will create file DHCP.TXT which will contain obtain
 
 
 DS3231 version is going to be updated much later but works fine.  
+Currently only PCF8563_JSON version is updated. Please use this one.  
 
 If there is Error[500] use another browser (this dosen't work with Edge)  
 	
