@@ -12,9 +12,12 @@
 /*
   Read JSON directly from SDcard
 
-  Create PC executable to create JSON file
-    (pc asks to connect one sensor, reads address and gives name
-    then asks for ip settings)
+  Improve user experience while generating settings.txt
+
+  Encrypt password in file
+
+  Multiple WiFi networks to connect
+    (when one is unavailable try connect ot another)
 */
 
 IPAddress timeServerIP;
@@ -89,14 +92,14 @@ void setup() {
   }
 
   if (httpserver) {
+    server.on("/sensors", HTTP_GET, sensorSettings);
     server.on("/list", HTTP_GET, printDirectory);
     server.on("/", HTTP_DELETE, handleDelete);
     server.on("/", HTTP_PUT, handleCreate);
     server.on("/", HTTP_POST, []() {
       returnOK();
     }, handleFileUpload);
-    server.on("/pass.pwd", HTTP_GET, returnForbidden);
-    server.on("/pass.pwd", HTTP_POST, returnForbidden);
+    //server.on("/settings.txt", HTTP_GET, returnForbidden); //Gonna uncomment this
     server.onNotFound(handleNotFound);
     server.begin();
     Serial.println("HTTP server started");
@@ -225,6 +228,40 @@ void loop() {
       }
     }
   }
+}
+
+void sensorSettings() {
+  sensors.requestTemperatures();
+  byte i;
+  byte present = 0;
+  byte data[12];
+  byte addr[8];
+  double te;
+  server.sendContent("<!DOCTYPE html><html><head><title>Sensors</title>");
+  server.sendContent("<style>table,th,td{border:1px solid black;");
+  server.sendContent("text-align:center}</style></head>");
+  server.sendContent("<body><table><caption><b>Available sensors</b></caption>");
+  server.sendContent("<tr><th>Address</th><th>Temperature</th>");
+  while (oneWire.search(addr)) {
+    server.sendContent("<tr><td>");
+    for (i = 0; i < 8; i++) {
+      if (addr[i] < 100) server.sendContent("0");
+      if (addr[i] < 10) server.sendContent("0");
+      server.sendContent((String)addr[i]);
+      if (i < 7)
+        server.sendContent(",");
+    }
+    if (OneWire::crc8(addr, 7) != addr[7]) {
+      server.sendContent("Invalid CRC!");
+      return;
+    }
+    server.sendContent("</td><td>");
+    te = sensors.getTempC(addr);
+    server.sendContent((String)te);
+    server.sendContent("</td></tr>");
+  }
+  server.sendContent("</table></body></html>");
+  return;
 }
 
 void createfile(JsonObject &nameobj) {
