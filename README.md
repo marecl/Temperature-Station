@@ -1,5 +1,5 @@
-#Temperature Station  
-##I made this project for my father who needed to log activity of central heater  
+# Temperature Station  
+## I made this project for my father who needed to log activity of central heater  
 
 	Definitions (not JSON version):  
 		* DHCPFILE [name] - when DHCP is set, there will be written obtained IP address  
