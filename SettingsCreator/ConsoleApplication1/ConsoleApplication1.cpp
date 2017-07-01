@@ -24,12 +24,15 @@ int main()
 	while (1) {
 		cout << "Name: ";
 		cin >> name;
-		if (name == "\\quit")
+		if (name == "\\quit") {
+			if (valid_sensors == 0) {
+				cout << "There must be at least one sensor!\n"; continue;
+			}
 			break;
+		}
 		cout << "Address: ";
 		cin >> addr;
-		if (!pierwszy)
-			out = ",\n\t\t";
+		if (!pierwszy) out = ",\n\t\t";
 		else pierwszy = false;
 		out += "[\"" + name + "\"," + addr + "]";
 		settings << out;
@@ -70,16 +73,35 @@ int main()
 	}
 	settings << "\"\n\t},\n";
 
-	settings << "\t\"wlan\": {\n";
-	cout << "SSID: ";
-	cin >> name;
-	settings << "\t\t\"ssid\": \"" << name << "\",\n";
-	cout << "Password: ";
-	cin >> name;
-	settings << "\t\t\"pass\": \"" << name << "\"\n\t}\n";
-
+	settings << "\t\"wlan\": [\n\t\t";
+	cout << "Enter network credentails (type \\quit to finish\n";
+	pierwszy = true;
+	valid_sensors = 0;
+	while (1) {
+		cout << "SSID: ";
+		cin >> name;
+		if (name == "\\quit") {
+			if (valid_sensors == 0) {
+				cout << "No Access Points given. Understandable.\n";
+				settings << "[\"-1\", \"-1\"]";
+				valid_sensors = 1;
+			}
+			break;
+		}
+		if (!pierwszy) settings << ",\n\t\t[";
+		else pierwszy = false;
+		settings << "[\"" << name << "\", ";
+		cout << "Password: ";
+		cin >> name;
+		settings << "\"" << name << "\"]";
+		valid_sensors++;
+	}
+	cout << endl << valid_sensors << endl;
+	settings << "\n\t],\n";
+	settings << "\t\"saved_ap\": " << valid_sensors << endl;
 	settings << "}";
 	settings.close();
+	while (1);
 	return 0;
 }
 

@@ -12,12 +12,7 @@
 /*
   Read JSON directly from SDcard
 
-  Improve user experience while generating settings.txt
-
   Encrypt password in file
-
-  Multiple WiFi networks to connect
-    (when one is unavailable try connect ot another)
 */
 
 IPAddress timeServerIP;
@@ -31,7 +26,7 @@ DallasTemperature sensors(&oneWire);
 
 DynamicJsonBuffer jsonBuffer(750);
 
-czas zegar(1, SDA, SCL); //PCF8563 address, timezone
+czas zegar(1, SDA, SCL); //timezone, SDA, SCL
 
 void setup() {
   Serial.begin(115200);
@@ -187,9 +182,9 @@ void loop() {
     if (hasSD) {
       delay(150);
       if (hasSD && !digitalRead(SD_D)) {
-        File root = SD.open(workfile, FILE_WRITE);
         zegar.readRTC();
         if (zegar.hour == 0 && zegar.minute == 0) createfile(settings);
+        File root = SD.open(workfile, FILE_WRITE);
         root.print(printDateTime() + ";");
         root.flush();
         for (int c = 0; c < valid_sensors; c++) {
@@ -211,6 +206,7 @@ void loop() {
         httpserver = false;
         Serial.println("!!! NO SDCARD !!!");
       }
+      zegar.readRTC();
     }
     while (zegar.minute % 5 == 0) {
       zegar.readRTC();
@@ -341,50 +337,59 @@ bool wifiConn (JsonObject &wifiset) {
   String ip = wifiset["ip"]["ip"];
   String gate = wifiset["ip"]["gateway"];
   String sub = wifiset["ip"]["subnet"];
-  String ssid = wifiset["wlan"]["ssid"];
-  String pass = wifiset["wlan"]["pass"];
+  saved_ap = wifiset["saved_ap"];
 
-  char *ssidc = new char[ssid.length() + 1];
-  strcpy(ssidc, ssid.c_str());
-  char *passc = new char[pass.length() + 1];
-  strcpy(passc, pass.c_str());
-  //Serial.println(ssid);
-  //Serial.println(password);
-  if (!dhcp) WiFi.config(stringToIP(ip), stringToIP(gate), stringToIP(sub));
-  WiFi.begin(ssidc, passc);
-  Serial.print("Connecting to ");
-  Serial.println(ssidc);
+  for (int xxx = 0; xxx < saved_ap; xxx++) {
+    String ssid = wifiset["wlan"][xxx][0];
+    String pass = wifiset["wlan"][xxx][1];
+    if (ssid == "-1" && pass == "-1") return false;
+    char *ssidc = new char[ssid.length() + 1];
+    strcpy(ssidc, ssid.c_str());
+    char *passc = new char[pass.length() + 1];
+    strcpy(passc, pass.c_str());
+    //Serial.println(ssid);
+    //Serial.println(password);
+    if (!dhcp) WiFi.config(stringToIP(ip), stringToIP(gate), stringToIP(sub));
+    WiFi.begin(ssidc, passc);
+    Serial.print("Connecting to ");
+    Serial.println(ssid);
 
-  delete[] passc;
-  delete[] ssidc;
-  // Wait for connection
-  uint8_t i = 0;
+    delete[] passc;
+    delete[] ssidc;
+    // Wait for connection
+    uint8_t i = 0;
 
-  while (WiFi.status() != WL_CONNECTED && i++ < 20) {//wait 10 seconds
-    delay(500);
-  }
+    while (WiFi.status() != WL_CONNECTED && i++ < 20) {//wait 10 seconds
+      delay(500);
+    }
 
-  if (i >= 21 && WiFi.status() != WL_CONNECTED) return false;
-
-  Serial.print("Connected! \nIP address: ");
-  Serial.println(WiFi.localIP());
-  Serial.print("Gateway: ");
-  Serial.println(WiFi.gatewayIP());
-  Serial.print("Subnet mask: ");
-  Serial.println(WiFi.subnetMask());
-  Serial.print("IP obtain mode: ");
-  if (dhcp) Serial.println("DHCP");
-  else Serial.println("Static");
-  if (dhcp) {
-    if (SD.exists(DHCPFILE)) SD.remove(DHCPFILE); //Zrzut adresu IP
-    File root = SD.open(DHCPFILE, FILE_WRITE);
-    root.println("mode=dhcp");
-    root.print("ip="); root.println(WiFi.localIP());
-    root.flush();
-    root.print("gateway="); root.println(WiFi.gatewayIP());
-    root.print("subnet="); root.println(WiFi.subnetMask());
-    root.flush();
-    root.close();
+    if (i >= 21 && WiFi.status() != WL_CONNECTED) {
+      Serial.println("Unable to connect to " + ssid); continue;
+    }
+    if (xxx++ == saved_ap) {
+      Serial.println("No networks available or incorrect credentails"); return false;
+    }
+    Serial.print("Connected to " + ssid + " \nIP address: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Gateway: ");
+    Serial.println(WiFi.gatewayIP());
+    Serial.print("Subnet mask: ");
+    Serial.println(WiFi.subnetMask());
+    Serial.print("IP obtain mode: ");
+    if (dhcp) Serial.println("DHCP");
+    else Serial.println("Static");
+    if (dhcp) {
+      if (SD.exists(DHCPFILE)) SD.remove(DHCPFILE); //Zrzut adresu IP
+      File root = SD.open(DHCPFILE, FILE_WRITE);
+      root.println("mode=dhcp");
+      root.print("ip="); root.println(WiFi.localIP());
+      root.flush();
+      root.print("gateway="); root.println(WiFi.gatewayIP());
+      root.print("subnet="); root.println(WiFi.subnetMask());
+      root.flush();
+      root.close();
+    }
+    break;
   }
   return true;
 }
@@ -584,7 +589,7 @@ String printDateTime() {
   return datestring;
 }
 
-double getTemp(JsonObject &addrset, int row) {
+double getTemp(JsonObject & addrset, int row) {
   byte tempaddr[8];
   for (int b = 0; b < 8; b++)
     tempaddr[b] = addrset["sensor"][row][b + 1];

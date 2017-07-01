@@ -8,7 +8,6 @@
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
 #define DHCPFILE "DHCP.TXT"
-#define TEMPLATE "TEMPLATE.TXT"
 #define SETTINGS_FILE "SETTINGS.TXT"
 #define NTPSERV "tempus1.gum.gov.pl"
 
@@ -28,6 +27,7 @@ unsigned int localPort = 2390;
 String workfile = "TEMP.CSV";
 
 int valid_sensors = 0;
+int saved_ap = 0;
 double _temps_[MAX_SENSORS];
 
 IPAddress stringToIP(String input) {
