@@ -43,51 +43,26 @@ Every temperature log can be found by /archiwum/YYYYMM/DD.csv
 	
 		!!!TODO!!!  
 
-Main sketch:  
-	1.Add SSL support (including login page)  
-	2.WWW based updater  
-	3.Automatic daylight saving  
-	4.Encrypt WiFi password   
-	5.Enable/disable NTP sync (saved in JSON)  
-	6.Display name if available on /sensors  
-	7.Change name of sensor on /sensors (new name saved to json file)  
-	8.Move NTP server to JSON  
-	9.Set date and time on the webpage  
-	
-PC program:   
-	1.Add validation mechanisms to settings generator  
-	
-Czas.h library:  
-	1.Access to variables ONLY via functions  
-	2.Make proper destructor to free memory when work is done  
-	3.Make daylight saving automatic and move dls to private  
-	4.Return actual date and time as epoch  
-	
-Hardware:  
-	1.Update DS3231 and PCF8563 version to newest sketch  
-	2.Make full-SMD version (without NodeMCU, just ESP-12E)  
-	
 	Main sketch:  
-		1. Add SSL support (including login page)  
-		2. WWW based updater  
-		3. Automatic daylight saving  
-		4. Encrypt WiFi password  
-		5. Many WiFi stations credentials (if one fails, connects to another)   
-		6. Display name if available on /sensors  
-		7. Change name of sensor on /sensors (new name saved to json file)  
-		8. Move NTP server to JSON  
-		9. Set date and time on the webpage  
-		10. Enable/disable NTP sync (saved in JSON)  
+		1.Add SSL support (including login page)  
+		2.WWW based updater  
+		3.Automatic daylight saving  
+		4.Encrypt WiFi password   
+		5.Enable/disable NTP sync (saved in JSON)  
+		6.Display name if available on /sensors  
+		7.Change name of sensor on /sensors (new name saved to json file)  
+		8.Move NTP server to JSON  
+		9.Set date and time on the webpage  
 
 	PC program:   
-		1. Add validation mechanisms to settings generator  
+		1.Add validation mechanisms to settings generator  
 
 	Czas.h library:  
-		1. Access to variables ONLY via functions  
-		2. Make proper destructor to free memory when work is done  
-		3. Make daylight saving automatic and move dls to private  
-		4. Add date->epoch converter
+		1.Access to variables ONLY via functions  
+		2.Make proper destructor to free memory when work is done  
+		3.Make daylight saving automatic and move dls to private  
+		4.Return actual date and time as epoch  
 
 	Hardware:  
-		1. Update DS3231 version to newest sketch  
-		2. Make full-SMD version (without NodeMCU, just ESP-12E)  
+		1.Update DS3231 and PCF8563 version to newest sketch  
+		2.Make full-SMD version (without NodeMCU, just ESP-12E)  
