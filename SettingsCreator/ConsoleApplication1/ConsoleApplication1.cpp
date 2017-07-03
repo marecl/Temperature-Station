@@ -15,8 +15,57 @@ string out = "";
 int valid_sensors = 0;
 bool pierwszy = true;
 bool dhcp = false;
-int main()
-{
+
+bool verify_addr(string address) {
+	int x = 0;
+	string verify = "";
+	int temp;
+	int verified = 0;
+	while (x < address.length()) {
+		verify = "";
+		temp = 0;
+		while (address[x] != ',' && x != address.length()) {
+			verify += address[x];
+			x++;
+		}
+		x++;
+		if (verify != "") {
+			const char * verifyc = verify.c_str();
+			temp = atoi(verifyc);
+		}
+		else return false;
+		if (temp > 255) return false;
+		verified++;
+	}
+	if (verified != 8) return false;
+	return true;
+}
+
+bool verify_ip(string address) {
+	string verify = "";
+	int temp;
+	int verified = 0;
+	int x = 0;
+	while (x < address.length()) {
+		verify = "";
+		temp = 0;
+		while (address[x] != '.' && x != address.length()) {
+			verify += address[x];
+			x++;
+		}
+		x++;
+		if (verify != "") {
+			const char * verifyc = verify.c_str();
+			temp = atoi(verifyc);
+		}
+		if (temp > 255) return false;
+		verified++;
+	}
+	if (verified != 4) return false;
+	return true;
+}
+
+int main() {
 	ofstream settings;
 	settings.open("settings.txt", ios::out);
 	settings << "{\n\t\"sensor\": [\n\t\t";
@@ -32,10 +81,18 @@ int main()
 		}
 		cout << "Address: ";
 		cin >> addr;
-		if (!pierwszy) out = ",\n\t\t";
+		if (!verify_addr(addr)) {
+			cout << "Incorrect address. Enter name and address again.\n";
+			continue;
+		}
+
+		if (!pierwszy) settings << ",\n\t\t";
 		else pierwszy = false;
-		out += "[\"" + name + "\"," + addr + "]";
+		out = "[\"" + name + "\"";
+		out += "," + addr;
+		out += "]";
 		settings << out;
+		settings.flush();
 		out = "";
 		valid_sensors++;
 	}
@@ -47,29 +104,54 @@ int main()
 	cin >> name;
 	transform(name.begin(), name.end(), name.begin(), ::tolower);
 	settings << "\"mode\": " << "\"" << name << "\",\n";
-	settings << "\t\t\"ip\": \"";
-	if (name == "static") {
+	if (name == "static")
 		dhcp = false;
-		cout << "IP address: ";
-		cin >> name;
-		settings << name;
-	}
 	else dhcp = true;
-	settings << "\",\n";
 
-	settings << "\t\t\"gateway\": \"";
-	if (!dhcp) {
-		cout << "Gateway IP: ";
-		cin >> name;
-		settings << name;
+	settings << "\t\t\"ip\": \"";
+
+	while (1) {
+		if (!dhcp) {
+			cout << "IP address: ";
+			cin >> name;
+			if (!verify_ip(name)) {
+				cout << "Incorrect IP address!\n";
+				continue;
+			}
+			settings << name;
+			break;
+		}
 	}
 	settings << "\",\n";
+	settings << "\t\t\"gateway\": \"";
 
+	while (1) {
+		if (!dhcp) {
+			cout << "Gateway IP: ";
+			cin >> name;
+			if (!verify_ip(name)) {
+				cout << "Incorrect gateway IP!\n";
+				continue;
+			}
+			settings << name;
+			break;
+		}
+	}
+
+	settings << "\",\n";
 	settings << "\t\t\"subnet\": \"";
-	if (!dhcp) {
-		cout << "Subnet mask: ";
-		cin >> name;
-		settings << name;
+
+	while (1) {
+		if (!dhcp) {
+			cout << "Subnet mask: ";
+			cin >> name;
+			if (!verify_ip(name)) {
+				cout << "Incorrect subnet mask!\n";
+				continue;
+			}
+			settings << name;
+			break;
+		}
 	}
 	settings << "\"\n\t},\n";
 
@@ -96,12 +178,11 @@ int main()
 		settings << "\"" << name << "\"]";
 		valid_sensors++;
 	}
-	cout << endl << valid_sensors << endl;
 	settings << "\n\t],\n";
 	settings << "\t\"saved_ap\": " << valid_sensors << endl;
 	settings << "}";
+	settings.flush();
 	settings.close();
 	while (1);
 	return 0;
 }
-

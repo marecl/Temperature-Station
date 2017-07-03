@@ -1,7 +1,7 @@
 (export (version D)
   (design
-    (source "C:/Users/fotel/Documents/Arduino/Temperature-Station/Temperature-Station_PCF8563/Mainboard1.1 — kopia/Mainboard_1.1.sch")
-    (date "27.06.2017 23:18:09")
+    (source C:/Users/fotel/Documents/Arduino/Temperature-Station/PCF8563_PCB/Mainboard1.1_LM1117/Mainboard1.1_LM1117.sch)
+    (date "03.07.2017 12:00:46")
     (tool "Eeschema 4.0.6")
     (sheet (number 1) (name /) (tstamps /)
       (title_block
@@ -9,7 +9,7 @@
         (company)
         (rev)
         (date)
-        (source Mainboard_1.1.sch)
+        (source Mainboard1.1_LM1117.sch)
         (comment (number 1) (value ""))
         (comment (number 2) (value ""))
         (comment (number 3) (value ""))
@@ -113,7 +113,7 @@
       (tstamp 591DF401))
     (comp (ref U1)
       (value LM1117-3.3)
-      (footprint TO_SOT_Packages_SMD:TO-252-2)
+      (footprint TO_SOT_Packages_SMD:SOT-223-3Lead_TabPin2)
       (libsource (lib regul) (part LM1117-3.3))
       (sheetpath (names /) (tstamps /))
       (tstamp 591E00AF))

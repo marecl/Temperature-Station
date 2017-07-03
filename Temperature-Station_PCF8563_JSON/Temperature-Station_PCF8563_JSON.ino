@@ -13,6 +13,8 @@
   Read JSON directly from SDcard
 
   Encrypt password in file
+
+  Move NTP and timezone to config!
 */
 
 IPAddress timeServerIP;

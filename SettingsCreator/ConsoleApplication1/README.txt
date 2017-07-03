@@ -14,6 +14,6 @@ You will be asked if you must enter something.
   
 3. Access Point SSID and passphrase - device will connect with entered SSID.  
 Open networks are not tested yet.  
-  
-Please note this program dosen't have validation mechanisms!  
-Be sure you entered everything correctly!  
+
+Validation mechanisms are added.  
+In my tests they're working.  

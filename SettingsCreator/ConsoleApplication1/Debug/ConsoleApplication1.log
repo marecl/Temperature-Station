@@ -1,3 +1,5 @@
 ﻿  ConsoleApplication1.cpp
+c:\users\fotel\documents\arduino\temperature-station\settingscreator\consoleapplication1\consoleapplication1.cpp(24): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
+c:\users\fotel\documents\arduino\temperature-station\settingscreator\consoleapplication1\consoleapplication1.cpp(49): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
   ConsoleApplication1.vcxproj -> C:\Users\fotel\Documents\Arduino\Temperature-Station\SettingsCreator\Debug\ConsoleApplication1.exe
   ConsoleApplication1.vcxproj -> C:\Users\fotel\Documents\Arduino\Temperature-Station\SettingsCreator\Debug\ConsoleApplication1.pdb (Partial PDB)

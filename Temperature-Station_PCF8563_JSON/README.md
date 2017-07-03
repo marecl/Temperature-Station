@@ -29,8 +29,9 @@ Features:
 	
 Can be generated using SettingsGenerator and [ip]/sensors.  
 Or you can do it yourself.  
+SettingsGenerator has got validation mechanisms. They're working for me.  
+When invalid address (sensor or IP) is entered it will ask you to write it again. Simple.  
 
-Please note everything must be correct, there are no validation mechanisms yet!  
 After selecting dhcp mode Station will create file DHCP.TXT which will contain obtained IP address and so on.  
 
 Order of logged temperatures is just as order in file.  
