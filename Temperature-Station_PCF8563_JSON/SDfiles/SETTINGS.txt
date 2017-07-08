@@ -17,5 +17,7 @@
 		["....", "...."],
 		["....", "...."]
 	]
-	"saved_ap": 3
+	"saved_ap": 3,
+	"ntp_server": "tempus1.gum.gov.pl",
+	"timezone": 1
 }

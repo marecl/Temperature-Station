@@ -1,24 +1,23 @@
-#define SD_D D0
-#define SDA D1
-#define SCL D2
-#define OW_PORT D3
-#define SD_CS D4
+#define SD_D D0 //GPIO16
+#define SDA D1  //GPIO5
+#define SCL D2  //GPIO4
+#define OW_PORT D3 //GPIO0
+#define SD_CS D4 //GPIO2
 #define READ_COND (tmp != '\r' && tmp != '\n' && tmp != 255 && tmp != '=')
 #define READ_COND2 (tmp == '\r' || tmp == '\n' || tmp == '\t' || tmp == 0)
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
 #define DHCPFILE "DHCP.TXT"
 #define SETTINGS_FILE "SETTINGS.TXT"
-#define NTPSERV "tempus1.gum.gov.pl"
 
 #define MAX_SENSORS 16
 
 static bool hasSD = false;
 static bool httpserver = false;
+bool use_ntp = true;
 
 String json = "";
 
-const char* ntpServerName = NTPSERV;
 const int NTP_PACKET_SIZE = 48;
 byte packetBuffer[NTP_PACKET_SIZE];
 

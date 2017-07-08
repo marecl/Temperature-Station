@@ -20,7 +20,7 @@ const uint8_t daysInMonth [] PROGMEM = { 31, 28, 31, 30, 31, 30,
                                        
 class czas { //PCF8563
   public:
-    czas(signed short int zone, byte sda_pin, byte scl_pin);
+    czas(byte sda_pin, byte scl_pin);
     ~czas();
     int second;
     int minute;
@@ -32,14 +32,13 @@ class czas { //PCF8563
     bool dls; //Daylight saving
     void readRTC();
     void setRTC(uint32_t t);
-  private:
     signed short int timezone;
+  private:
     byte bcdToDec(byte value);
     byte decToBcd(byte value);
 };
 
-czas::czas(signed short int zone, byte sda_pin, byte scl_pin) {
-  timezone = zone;
+czas::czas(byte sda_pin, byte scl_pin) {
   dls = true;
   Wire.begin(sda_pin, scl_pin);
   Wire.beginTransmission(RTC_ADDR);

@@ -28,7 +28,7 @@ DallasTemperature sensors(&oneWire);
 
 DynamicJsonBuffer jsonBuffer(750);
 
-czas zegar(1, SDA, SCL); //timezone, SDA, SCL
+czas zegar(SDA, SCL); //timezone, SDA, SCL
 
 void setup() {
   Serial.begin(115200);
@@ -38,31 +38,30 @@ void setup() {
 
   if (!digitalRead(SD_D)) {
     if (SD.begin(SD_CS)) {
-      Serial.println("SD Card initialized.");
+      Serial.println(F("SD Card initialized."));
       hasSD = true;
       if (!SD.exists(SETTINGS_FILE)) {
-        Serial.println("No settings file. Unable to connect to WiFi or log temperature!");
-        Serial.println("Rebooting and waiting for valid SETTINGS.TXT file...");
+        Serial.println(F("No settings file. Unable to connect to WiFi or log temperature!"));
+        Serial.println(F("Rebooting and waiting for valid SETTINGS.TXT file..."));
         delay(1000);
         ESP.restart();
       }
     }
     else {
-      Serial.println("SD Card present but cannot be initialized!");
-      Serial.println("No card - no data logging!");
+      Serial.println(F("SD Card present but cannot be initialized!"));
+      Serial.println(F("No card - no data logging!"));
       hasSD = false;
     }
   } else if (!hasSD) {
-    Serial.print("I'm supposed to be server, not paperweight!\n");
-    Serial.print("Need SDcard.\n");
-    Serial.print("Rebooting...\n");
+    Serial.print(F("I'm supposed to be server, not paperweight!\n"));
+    Serial.print(F("Need SDcard.\n"));
+    Serial.print(F("Rebooting...\n"));
     delay(1000);
     ESP.restart();
   }
 
   File root = SD.open(SETTINGS_FILE , FILE_READ);
   int tmp = root.read();
-  String json = "";
   while (tmp != -1) {
     if (tmp != 10 && tmp != 13 && tmp != 32 && tmp != 9)
       json += (char)tmp;
@@ -72,8 +71,8 @@ void setup() {
 
   JsonObject& settings = jsonBuffer.parseObject(json);
   if (!settings.success()) {
-    Serial.println("Invalid JSON file");
-    Serial.println("Come back with valid one. Rebooting...");
+    Serial.println(F("Invalid JSON file"));
+    Serial.println(F("Come back with valid one. Rebooting..."));
     delay(1000);
     ESP.restart();
   }
@@ -81,15 +80,16 @@ void setup() {
   if (wifiConn(settings))
     httpserver = true;
   else {
-    Serial.print("Could not connect to WiFi!\n");
-    Serial.print("Check SSID and PASSWORD and try again\n");
-    Serial.print("Maybe static IP settings are incorrect\n");
-    Serial.print("Log mode only\n");
+    Serial.print(F("Could not connect to WiFi!\n"));
+    Serial.print(F("Check SSID and PASSWORD and try again\n"));
+    Serial.print(F("Maybe static IP settings are incorrect\n"));
+    Serial.print(F("Log mode only\n"));
     httpserver = false;
   }
 
   if (httpserver) {
     server.on("/sensors", HTTP_GET, sensorSettings);
+    server.on("/time", HTTP_GET, updatetime);
     server.on("/list", HTTP_GET, printDirectory);
     server.on("/", HTTP_DELETE, handleDelete);
     server.on("/", HTTP_PUT, handleCreate);
@@ -99,24 +99,29 @@ void setup() {
     //server.on("/settings.txt", HTTP_GET, returnForbidden); //Gonna uncomment this
     server.onNotFound(handleNotFound);
     server.begin();
-    Serial.println("HTTP server started");
+    Serial.println(F("HTTP server started"));
 
-    delay(2500);
-    udp.begin(localPort);
-    WiFi.hostByName(ntpServerName, timeServerIP);
-    sendNTPpacket(timeServerIP);
-    delay(1000);
-    int cb = udp.parsePacket();
-    if (!cb)
-      Serial.println("Received invalid NTP data");
-    else {
-      Serial.println("Received valid NTP data");
-      udp.read(packetBuffer, NTP_PACKET_SIZE);
-      unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
-      unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
-      unsigned long secsSince1900 = highWord << 16 | lowWord;
-      unsigned long epoch = secsSince1900 - 2208988800UL;
-      zegar.setRTC(epoch);
+    use_ntp = settings["use_ntp"];
+    if (use_ntp) {
+      delay(2500);
+      udp.begin(localPort);
+      const char* ntpServerName = settings["ntp_server"];
+      WiFi.hostByName(ntpServerName, timeServerIP);
+      sendNTPpacket(timeServerIP);
+      delay(1000);
+      int cb = udp.parsePacket();
+      if (!cb)
+        Serial.println(F("Received invalid NTP data"));
+      else {
+        Serial.println(F("Received valid NTP data"));
+        udp.read(packetBuffer, NTP_PACKET_SIZE);
+        unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
+        unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
+        unsigned long secsSince1900 = highWord << 16 | lowWord;
+        unsigned long epoch = secsSince1900 - 2208988800UL;
+        zegar.timezone = settings["timezone"];
+        zegar.setRTC(epoch);
+      }
     }
   }
   zegar.readRTC();
@@ -124,7 +129,7 @@ void setup() {
   //createtemplate();
 
   valid_sensors = settings["valid_sensors"];
-  Serial.println("\r\nSensor list:");
+  Serial.println(F("\nSensor list:"));
   for (int a = 0; a < valid_sensors; a++) {
     Serial.print((String)(a + 1) + "/" + (String)MAX_SENSORS + ": ");
     String xdtmp = settings["sensor"][a][0];
@@ -138,6 +143,7 @@ void setup() {
     Serial.print(")\n");
     getTemp(settings, a);
   }
+  Serial.println();
   createfile(settings);
 }
 
@@ -167,11 +173,11 @@ void loop() {
       if (digitalRead(SD_D) && hasSD) {
         hasSD = false;
         httpserver = false;
-        Serial.println("!!! NO SDCARD !!!");
+        Serial.println(F("!!! NO SDCARD !!!"));
       }
       if (!hasSD) {
         while (digitalRead(SD_D)) delay(1000);
-        Serial.println("SD Card found. Reboot...");
+        Serial.println(F("SD Card found. Reboot..."));
         ESP.restart();
       }
     }
@@ -206,7 +212,7 @@ void loop() {
       } else {
         hasSD = false;
         httpserver = false;
-        Serial.println("!!! NO SDCARD !!!");
+        Serial.println(F("!!! NO SDCARD !!!"));
       }
       zegar.readRTC();
     }
@@ -217,11 +223,11 @@ void loop() {
       if (digitalRead(SD_D) && hasSD) {
         hasSD = false;
         httpserver = false;
-        Serial.println("!!! NO SDCARD !!!");
+        Serial.println(F("!!! NO SDCARD !!!"));
       }
       if (!hasSD) {
         while (digitalRead(SD_D)) delay(1000);
-        Serial.println("SD Card found. Reboot...");
+        Serial.println(F("SD Card found. Reboot..."));
         ESP.restart();
       }
     }
@@ -235,11 +241,11 @@ void sensorSettings() {
   byte data[12];
   byte addr[8];
   double te;
-  server.sendContent("<!DOCTYPE html><html><head><title>Sensors</title>");
-  server.sendContent("<style>table,th,td{border:1px solid black;");
-  server.sendContent("text-align:center}</style></head>");
-  server.sendContent("<body><table><caption><b>Available sensors</b></caption>");
-  server.sendContent("<tr><th>Address</th><th>Temperature</th>");
+  server.sendContent(F("<!DOCTYPE html><html><head><title>Sensors</title>"));
+  server.sendContent(F("<style>table,th,td{border:1px solid black;"));
+  server.sendContent(F("text-align:center}</style></head>"));
+  server.sendContent(F("<body><table><caption><b>Available sensors</b></caption>"));
+  server.sendContent(F("<tr><th>Address</th><th>Temperature</th>"));
   while (oneWire.search(addr)) {
     server.sendContent("<tr><td>");
     for (i = 0; i < 8; i++) {
@@ -294,6 +300,8 @@ void createfile(JsonObject &nameobj) {
 }
 
 void updatetime() {
+  Serial.print(F("Aktualizacja czasu!\nCzas przed: "));
+  Serial.println(printDateTime());
   sendNTPpacket(timeServerIP);
   delay(1000);
   int cb = udp.parsePacket();
@@ -306,10 +314,12 @@ void updatetime() {
     unsigned long epoch = secsSince1900 - seventyYears;
     zegar.setRTC(epoch);
   }
+  Serial.print(F("Czas po: "));
+  Serial.println(printDateTime());
 }
 
 unsigned long sendNTPpacket(IPAddress & address) {
-  Serial.println("Sending NTP packet...");
+  Serial.println(F("Sending NTP packet..."));
   // set all bytes in the buffer to 0
   memset(packetBuffer, 0, NTP_PACKET_SIZE);
   // Initialize values needed to form NTP request
@@ -366,20 +376,23 @@ bool wifiConn (JsonObject &wifiset) {
     }
 
     if (i >= 21 && WiFi.status() != WL_CONNECTED) {
-      Serial.println("Unable to connect to " + ssid); continue;
+      Serial.print(F("Unable to connect to "));
+      Serial.println(ssid); continue;
     }
     if (xxx++ == saved_ap) {
-      Serial.println("No networks available or incorrect credentails"); return false;
+      Serial.println(F("No networks available or incorrect credentails")); return false;
     }
-    Serial.print("Connected to " + ssid + " \nIP address: ");
+    Serial.print(F("Connected to "));
+    Serial.print(ssid);
+    Serial.print(F(" \nIP address: "));
     Serial.println(WiFi.localIP());
-    Serial.print("Gateway: ");
+    Serial.print(F("Gateway: "));
     Serial.println(WiFi.gatewayIP());
-    Serial.print("Subnet mask: ");
+    Serial.print(F("Subnet mask: "));
     Serial.println(WiFi.subnetMask());
-    Serial.print("IP obtain mode: ");
-    if (dhcp) Serial.println("DHCP");
-    else Serial.println("Static");
+    Serial.print(F("IP obtain mode: "));
+    if (dhcp) Serial.println(F("DHCP"));
+    else Serial.println(F("Static"));
     if (dhcp) {
       if (SD.exists(DHCPFILE)) SD.remove(DHCPFILE); //Zrzut adresu IP
       File root = SD.open(DHCPFILE, FILE_WRITE);
@@ -409,7 +422,7 @@ void returnForbidden() {
   output += "<h1>403 FORBIDDEN</h1>\r\n";
   output += "</html>";
   server.send(403, "text/html", output);
-  Serial.println("Somebody tried to access password file!");
+  Serial.println(F("Somebody tried to access password file!"));
 }
 
 bool loadFromSdCard(String path) {
@@ -442,7 +455,7 @@ bool loadFromSdCard(String path) {
   if (server.hasArg("download")) dataType = "application/octet-stream";
 
   if (server.streamFile(dataFile, dataType) != dataFile.size()) {
-    Serial.println("Sent less data than expected!");
+    Serial.println(F("Sent less data than expected!"));
   }
 
   dataFile.close();

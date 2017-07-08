@@ -1,4 +1,4 @@
-update=18.05.2017 18:27:36
+update=08.07.2017 16:51:08
 version=1
 last_client=kicad
 [pcbnew]
@@ -23,9 +23,11 @@ ModuleOutlineThickness=0.150000000000
 [cvpcb]
 version=1
 NetIExt=net
+[general]
+version=1
 [eeschema]
 version=1
-LibDir=
+LibDir=../../../../../../../Program Files/KiCad/share/kicad-ESP8266-master
 [eeschema/libraries]
 LibName1=power
 LibName2=device
@@ -56,5 +58,4 @@ LibName26=opto
 LibName27=atmel
 LibName28=contrib
 LibName29=valves
-[general]
-version=1
+LibName30=C:/Program Files/KiCad/share/kicad-ESP8266-master/ESP8266

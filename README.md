@@ -51,11 +51,7 @@ Every temperature log can be found by /archiwum/YYYYMM/DD.csv
 		5.Enable/disable NTP sync (saved in JSON)  
 		6.Display name if available on /sensors  
 		7.Change name of sensor on /sensors (new name saved to json file)  
-		8.Move NTP server to JSON  
-		9.Set date and time on the webpage  
-
-	PC program:   
-		1.Add validation mechanisms to settings generator  
+		8.Set date and time on the webpage  
 
 	Czas.h library:  
 		1.Access to variables ONLY via functions  
