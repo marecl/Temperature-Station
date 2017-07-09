@@ -1,4 +1,9 @@
-I know there are pads for two voltage regulators but use only ONE!  
+# This version is going to be FULL SMD!  
+  
+FT232RL as usb->serial converter  
+ESP-12E/F as main chip  
+  
+Probably will be one sided, but I need to finish it yet.  
+Main diagram is ready, including autoreset on code load.  
 
-They are here because I don't know which one will be available in my store, so I made place for two.  
-#But use one!  
+### May contain little misconnections. If you are brave please test this.
