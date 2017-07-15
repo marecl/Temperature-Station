@@ -16,8 +16,9 @@
 		["....", "...."],
 		["....", "...."],
 		["....", "...."]
-	]
+	],
 	"saved_ap": 3,
 	"ntp_server": "tempus1.gum.gov.pl",
+	"use_ntp": true,
 	"timezone": 1
 }

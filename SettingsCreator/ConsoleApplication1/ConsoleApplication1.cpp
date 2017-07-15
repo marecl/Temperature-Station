@@ -110,48 +110,42 @@ int main() {
 
 	settings << "\t\t\"ip\": \"";
 
-	while (1) {
-		if (!dhcp) {
-			cout << "IP address: ";
-			cin >> name;
-			if (!verify_ip(name)) {
-				cout << "Incorrect IP address!\n";
-				continue;
-			}
-			settings << name;
-			break;
+	while (!dhcp) {
+		cout << "IP address: ";
+		cin >> name;
+		if (!verify_ip(name)) {
+			cout << "Incorrect IP address!\n";
+			continue;
 		}
+		settings << name;
+		break;
 	}
 	settings << "\",\n";
 	settings << "\t\t\"gateway\": \"";
 
-	while (1) {
-		if (!dhcp) {
-			cout << "Gateway IP: ";
-			cin >> name;
-			if (!verify_ip(name)) {
-				cout << "Incorrect gateway IP!\n";
-				continue;
-			}
-			settings << name;
-			break;
+	while (!dhcp) {
+		cout << "Gateway IP: ";
+		cin >> name;
+		if (!verify_ip(name)) {
+			cout << "Incorrect gateway IP!\n";
+			continue;
 		}
+		settings << name;
+		break;
 	}
 
 	settings << "\",\n";
 	settings << "\t\t\"subnet\": \"";
 
-	while (1) {
-		if (!dhcp) {
-			cout << "Subnet mask: ";
-			cin >> name;
-			if (!verify_ip(name)) {
-				cout << "Incorrect subnet mask!\n";
-				continue;
-			}
-			settings << name;
-			break;
+	while (!dhcp) {
+		cout << "Subnet mask: ";
+		cin >> name;
+		if (!verify_ip(name)) {
+			cout << "Incorrect subnet mask!\n";
+			continue;
 		}
+		settings << name;
+		break;
 	}
 	settings << "\"\n\t},\n";
 
@@ -179,8 +173,30 @@ int main() {
 		valid_sensors++;
 	}
 	settings << "\n\t],\n";
-	settings << "\t\"saved_ap\": " << valid_sensors << endl;
-	settings << "}";
+	settings << "\t\"saved_ap\": " << valid_sensors << ",\n";
+
+	cout << "Enter NTP server name (i.e. tempus1.gum.gov.pl): ";
+	cin >> name;
+	settings << "\t\"ntp_server\": " << name << ",\n";
+
+	while (1) {
+		cout << "Do You wish to automatically update date and time on boot? (Y/N): ";
+		name = "";
+		cin >> name;
+		if (name == "" || name == "Y" || name == "y") dhcp = true; //multipurpose variables :D
+		else if (name == "n" || name == "N") dhcp = false;
+		else continue;
+		break;
+	}
+	settings << "\t\"use_ntp\": ";
+	if (dhcp) settings << "true,\n";
+	else settings << "false,\n";
+
+	cout << "Enter Your timezone: ";
+	cin >> valid_sensors;
+	settings << "\t\"timezone\": " << valid_sensors;
+
+	settings << "\n}";
 	settings.flush();
 	settings.close();
 	while (1);

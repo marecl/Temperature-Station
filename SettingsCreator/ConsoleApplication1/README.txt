@@ -17,3 +17,5 @@ Open networks are not tested yet.
 
 Validation mechanisms are added.  
 In my tests they're working.  
+
+To Do: Change DHCP to DHCP_STAT and DHCP_DYN (one time initialization)  

@@ -1,34 +1,38 @@
 #include <ArduinoJson.h>
-#include <ESP8266WiFi.h>
-#include <WiFiClient.h>
-#include <ESP8266WebServer.h>
-#include <SPI.h>
-#include <SD.h>
+#include <Czas.h>
 #include <DallasTemperature.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266WiFi.h>
 #include <OneWire.h>
+#include <SD.h>
+#include <SPI.h>
+#include <WiFiClient.h>
 #include <WiFiUdp.h>
-#include "Czas.h"
 #include "defs.h"
 /*
   Read JSON directly from SDcard
 
   Encrypt password in file
 
-  Move NTP and timezone to config!
-*/
+  Add option to change/update date&time via http
 
+  Add dhcp_dyn and dhcp_stat to choose between:
+    1. Get IP and hold it
+    2. I'm getting whatever I deserve
+    And save it in JSON, not DHCP.txt!!!
+*/
 IPAddress timeServerIP;
 WiFiUDP udp;
 
 ESP8266WebServer server(80);
-
 File uploadFile;
+
 OneWire oneWire(OW_PORT);
 DallasTemperature sensors(&oneWire);
 
 DynamicJsonBuffer jsonBuffer(750);
 
-czas zegar(SDA, SCL); //timezone, SDA, SCL
+Czas zegar(SDA, SCL); //SDA, SCL
 
 void setup() {
   Serial.begin(115200);
@@ -125,8 +129,7 @@ void setup() {
     }
   }
   zegar.readRTC();
-  Serial.println(printDateTime());
-  //createtemplate();
+  Serial.println(printDateTime(zegar));
 
   valid_sensors = settings["valid_sensors"];
   Serial.println(F("\nSensor list:"));
@@ -193,7 +196,7 @@ void loop() {
         zegar.readRTC();
         if (zegar.hour == 0 && zegar.minute == 0) createfile(settings);
         File root = SD.open(workfile, FILE_WRITE);
-        root.print(printDateTime() + ";");
+        root.print(printDateTime(zegar) + ";");
         root.flush();
         for (int c = 0; c < valid_sensors; c++) {
           root.print(_temps_[c], 1);
@@ -203,7 +206,7 @@ void loop() {
         }
         root.flush();
         root.close();
-        Serial.println(printDateTime() + ":");
+        Serial.println(printDateTime(zegar) + ":");
         for (int c = 0; c < valid_sensors; c++) {
           String tempname = settings["sensor"][c][0];
           Serial.print("\t" + tempname + ": ");
@@ -301,7 +304,7 @@ void createfile(JsonObject &nameobj) {
 
 void updatetime() {
   Serial.print(F("Aktualizacja czasu!\nCzas przed: "));
-  Serial.println(printDateTime());
+  Serial.println(printDateTime(zegar));
   sendNTPpacket(timeServerIP);
   delay(1000);
   int cb = udp.parsePacket();
@@ -315,7 +318,7 @@ void updatetime() {
     zegar.setRTC(epoch);
   }
   Serial.print(F("Czas po: "));
-  Serial.println(printDateTime());
+  Serial.println(printDateTime(zegar));
 }
 
 unsigned long sendNTPpacket(IPAddress & address) {
@@ -371,16 +374,15 @@ bool wifiConn (JsonObject &wifiset) {
     // Wait for connection
     uint8_t i = 0;
 
-    while (WiFi.status() != WL_CONNECTED && i++ < 20) {//wait 10 seconds
+    while (WiFi.status() != WL_CONNECTED && i++ < 20) //wait 10 seconds
       delay(500);
-    }
 
     if (i >= 21 && WiFi.status() != WL_CONNECTED) {
       Serial.print(F("Unable to connect to "));
       Serial.println(ssid); continue;
     }
     if (xxx++ == saved_ap) {
-      Serial.println(F("No networks available or incorrect credentails")); return false;
+      Serial.println(F("No networks available or incorrect credentials")); return false;
     }
     Serial.print(F("Connected to "));
     Serial.print(ssid);
@@ -468,13 +470,13 @@ void handleFileUpload() {
   if (upload.status == UPLOAD_FILE_START) {
     if (SD.exists((char *)upload.filename.c_str())) SD.remove((char *)upload.filename.c_str());
     uploadFile = SD.open(upload.filename.c_str(), FILE_WRITE);
-    Serial.print("Upload: START, filename: "); Serial.println(upload.filename);
+    Serial.print(F("Upload: START, filename: ")); Serial.println(upload.filename);
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     if (uploadFile) uploadFile.write(upload.buf, upload.currentSize);
-    Serial.print("Upload: WRITE, Bytes: "); Serial.println(upload.currentSize);
+    Serial.print(F("Upload: WRITE, Bytes: ")); Serial.println(upload.currentSize);
   } else if (upload.status == UPLOAD_FILE_END) {
     if (uploadFile) uploadFile.close();
-    Serial.print("Upload: END, Size: "); Serial.println(upload.totalSize);
+    Serial.print(F("Upload: END, Size: ")); Serial.println(upload.totalSize);
   }
 }
 
@@ -576,32 +578,19 @@ void printDirectory() {
 
 void handleNotFound() {
   if (hasSD && loadFromSdCard(server.uri())) return;
-  String message = "PLIKU NIE ZNALEZIONO\n\n";
-  message += "URI: ";
+  String message = F("PLIKU NIE ZNALEZIONO\n\n");
+  message += F("URI: ");
   message += server.uri();
-  message += "\nMethod: ";
-  message += (server.method() == HTTP_GET) ? "GET" : "POST";
-  message += "\nArguments: ";
+  message += F("\nMethod: ");
+  message += (server.method() == HTTP_GET) ? F("GET") : F("POST");
+  message += F("\nArguments: ");
   message += server.args();
-  message += "\n";
+  message += F("\n");
   for (uint8_t i = 0; i < server.args(); i++) {
     message += " NAME:" + server.argName(i) + "\n VALUE:" + server.arg(i) + "\n";
   }
   server.send(404, "text/plain", message);
   Serial.print(message);
-}
-
-String printDateTime() {
-  char datestring[20];
-  snprintf_P(datestring,
-             countof(datestring),
-             PSTR("%02u/%02u/%04u;%02u:%02u"),
-             zegar.day,
-             zegar.month,
-             zegar.year,
-             zegar.hour,
-             zegar.minute );
-  return datestring;
 }
 
 double getTemp(JsonObject & addrset, int row) {

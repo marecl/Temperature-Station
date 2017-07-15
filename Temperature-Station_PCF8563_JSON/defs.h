@@ -3,8 +3,6 @@
 #define SCL D2  //GPIO4
 #define OW_PORT D3 //GPIO0
 #define SD_CS D4 //GPIO2
-#define READ_COND (tmp != '\r' && tmp != '\n' && tmp != 255 && tmp != '=')
-#define READ_COND2 (tmp == '\r' || tmp == '\n' || tmp == '\t' || tmp == 0)
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
 #define DHCPFILE "DHCP.TXT"
@@ -23,11 +21,25 @@ byte packetBuffer[NTP_PACKET_SIZE];
 
 unsigned int localPort = 2390;
 
-String workfile = "TEMP.CSV";
+String workfile = "TEMP.CSV"; //If no time is available we will use this file
+//I should make function which will automatically clean up records and move to correct files
 
 int valid_sensors = 0;
 int saved_ap = 0;
 double _temps_[MAX_SENSORS];
+
+String printDateTime(Czas& timeobj) {
+  char datestring[20];
+  snprintf_P(datestring,
+             countof(datestring),
+             PSTR("%02u/%02u/%04u;%02u:%02u"),
+             timeobj.day,
+             timeobj.month,
+             timeobj.year,
+             timeobj.hour,
+             timeobj.minute );
+  return datestring;
+}
 
 IPAddress stringToIP(String input) {
   int parts[4] = {0, 0, 0, 0};
