@@ -44,21 +44,21 @@ Every temperature log can be found by /archiwum/YYYYMM/DD.csv
 		!!!TODO!!!  
 
 	Main sketch:  
-		1.Add SSL support (including login page)  
-		2.WWW based updater  
-		3.Automatic daylight saving  
-		4.Encrypt WiFi password   
-		5.Enable/disable NTP sync (saved in JSON)  
-		6.Display name if available on /sensors  
-		7.Change name of sensor on /sensors (new name saved to json file)  
-		8.Set date and time on the webpage  
+		1. Add SSL support (including login page)  
+		2. WWW based updater  
+		3. Automatic daylight saving  
+		4. Encrypt WiFi password   
+		5. Update DS3231 and PCF8563 version to newest version  
+		6. Display name if available on /sensors  
+		7. Change name of sensor on /sensors (new name saved to json file)  
+		8. Set date and time on the webpage  
 
 	Czas.h library:  
-		1.Access to variables ONLY via functions  
-		2.Make proper destructor to free memory when work is done  
-		3.Make daylight saving automatic and move dls to private  
-		4.Return actual date and time as epoch  
+		1. Make daylight saving automatic and move dls to private  
+		2. Return actual date and time as epoch  
 
-	Hardware:  
-		1.Update DS3231 and PCF8563 version to newest sketch  
-		2.Make full-SMD version (without NodeMCU, just ESP-12E)  
+	Hardware:   
+		1. Make full-SMD version (without NodeMCU, just ESP-12E)  
+		
+	SettingsGenerator:
+		1. Update to use dhcp_stat option

@@ -4,9 +4,7 @@
 #define OW_PORT D3 //GPIO0
 #define SD_CS D4 //GPIO2
 #define countof(a) (sizeof(a) / sizeof(a[0]))
-
-#define DHCPFILE "DHCP.TXT"
-#define SETTINGS_FILE "SETTINGS.TXT"
+#define SETTINGS_FILE (char*)"SETTINGS.TXT"
 
 #define MAX_SENSORS 16
 
@@ -16,8 +14,7 @@ bool use_ntp = true;
 
 String json = "";
 
-const int NTP_PACKET_SIZE = 48;
-byte packetBuffer[NTP_PACKET_SIZE];
+byte packetBuffer[48];
 
 unsigned int localPort = 2390;
 
@@ -27,6 +24,13 @@ String workfile = "TEMP.CSV"; //If no time is available we will use this file
 int valid_sensors = 0;
 int saved_ap = 0;
 double _temps_[MAX_SENSORS];
+
+void updateSettings(JsonObject& file){
+  if(SD.exists(SETTINGS_FILE)) SD.remove(SETTINGS_FILE);
+  File root = SD.open(SETTINGS_FILE , FILE_WRITE);
+  file.printTo(root);
+  root.close();
+}
 
 String printDateTime(Czas& timeobj) {
   char datestring[20];
@@ -42,10 +46,10 @@ String printDateTime(Czas& timeobj) {
 }
 
 IPAddress stringToIP(String input) {
-  int parts[4] = {0, 0, 0, 0};
-  int part = 0;
-  for (int a = 0; a < input.length(); a++) {
-    char b = input[a];
+  uint8_t parts[4] = {0, 0, 0, 0};
+  uint8_t part = 0;
+  for (uint8_t a = 0; a < input.length(); a++) {
+    uint8_t b = input[a];
     if (b == '.') {
       part++;
       continue;
@@ -55,3 +59,10 @@ IPAddress stringToIP(String input) {
   }
   return IPAddress(parts[0], parts[1], parts[2], parts[3]);
 }
+
+String IPtoString(IPAddress address) {
+  String out = String(address[0]) + "." + String(address[1]) + ".";
+  out = out + String(address[2]) + "." + String(address[3]);
+  return out;
+}
+

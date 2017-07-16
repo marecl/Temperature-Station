@@ -1,0 +1,24 @@
+{
+	"sensor": [
+		["Name1", 40,255,59,189,114,22,5,105],
+		["Name2", 40,165,226,39,0,0,128,138],
+		["Name3", 40,255,226,51,52,22,4,182],
+		["Name4", 40,255,176,220,51,22,3,138]
+	],
+	"valid_sensors": 4,
+	"ip": {
+		"mode": "static",
+		"ip": "192.168.2.98",
+		"gateway": "192.168.2.1",
+		"subnet": "255.255.255.0"
+	},
+	"wlan": [
+		["Priority1", "Passphrase1"],
+		["Priority2", "Passphrase2"],
+		["Priority3", "Passphrase3"]
+	],
+	"saved_ap": 3,
+	"ntp_server": "tempus1.gum.gov.pl",
+	"use_ntp": true,
+	"timezone": 1
+}

@@ -1,0 +1,6 @@
+﻿  stdafx.cpp
+  SettingsGenerator.cpp
+c:\users\fotel\documents\visual studio 2017\projects\settingsgenerator\settingsgenerator\settingsgenerator.cpp(21): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
+c:\users\fotel\documents\visual studio 2017\projects\settingsgenerator\settingsgenerator\settingsgenerator.cpp(46): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
+  SettingsGenerator.vcxproj -> c:\users\fotel\documents\visual studio 2017\Projects\SettingsGenerator\Debug\SettingsGenerator.exe
+  SettingsGenerator.vcxproj -> c:\users\fotel\documents\visual studio 2017\Projects\SettingsGenerator\Debug\SettingsGenerator.pdb (Partial PDB)

@@ -1,0 +1,19 @@
+{
+	"sensor": [
+		["sdfsfsdf",123,123,123,123,123,123,123,123]
+	],
+	"valid_sensors": 1,
+	"ip": {
+		"mode": "dhcp",
+		"ip": "",
+		"gateway": "",
+		"subnet": ""
+	},
+	"wlan": [
+		["-1", "-1"]
+	],
+	"saved_ap": 1,
+	"ntp_server": sdd,
+	"use_ntp": false,
+	"timezone": 1
+}

@@ -7,8 +7,10 @@ month	KEYWORD2
 year	KEYWORD2
 dow	KEYWORD2
 dls	KEYWORD2
+timezone	KEYWORD2
 readRTC	KEYWORD2
 setRTC	KEYWORD2
-timezone	KEYWORD2
 bcdToDec	KEYWORD2
 decToBcd	KEYWORD2
+DateToEpoch	KEYWORD2
+CompareTimeEpoch	KEYWORD2

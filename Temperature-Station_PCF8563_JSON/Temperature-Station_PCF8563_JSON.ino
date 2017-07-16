@@ -1,5 +1,5 @@
 #include <ArduinoJson.h>
-#include <Czas.h>
+#include <Czas.h> //PCF8563 library
 #include <DallasTemperature.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
@@ -16,10 +16,7 @@
 
   Add option to change/update date&time via http
 
-  Add dhcp_dyn and dhcp_stat to choose between:
-    1. Get IP and hold it
-    2. I'm getting whatever I deserve
-    And save it in JSON, not DHCP.txt!!!
+  Check if user wants internet connection
 */
 IPAddress timeServerIP;
 WiFiUDP udp;
@@ -67,7 +64,7 @@ void setup() {
   File root = SD.open(SETTINGS_FILE , FILE_READ);
   int tmp = root.read();
   while (tmp != -1) {
-    if (tmp != 10 && tmp != 13 && tmp != 32 && tmp != 9)
+    if (tmp != 32 && tmp != 9)
       json += (char)tmp;
     tmp = root.read();
   }
@@ -117,14 +114,17 @@ void setup() {
       if (!cb)
         Serial.println(F("Received invalid NTP data"));
       else {
-        Serial.println(F("Received valid NTP data"));
-        udp.read(packetBuffer, NTP_PACKET_SIZE);
+        udp.read(packetBuffer, 48);
         unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
         unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
         unsigned long secsSince1900 = highWord << 16 | lowWord;
         unsigned long epoch = secsSince1900 - 2208988800UL;
         zegar.timezone = settings["timezone"];
-        zegar.setRTC(epoch);
+        zegar.readRTC();
+        if (!zegar.CompareTimeEpoch(epoch, 5)) {
+          Serial.println("Zegar zle chodzi. Ustawiam...");
+          zegar.setRTC(epoch);
+        }
       }
     }
   }
@@ -148,6 +148,8 @@ void setup() {
   }
   Serial.println();
   createfile(settings);
+  updateSettings(settings); //wifiConn can change our configuration
+  //So we should better save it
 }
 
 void loop() {
@@ -155,7 +157,7 @@ void loop() {
   int tmp = setfile.read();
   String json = "";
   while (tmp != -1) {
-    if (tmp != 10 && tmp != 13 && tmp != 32 && tmp != 9)
+    if (tmp != 32 && tmp != 9)
       json += (char)tmp;
     tmp = setfile.read();
   }
@@ -240,8 +242,6 @@ void loop() {
 void sensorSettings() {
   sensors.requestTemperatures();
   byte i;
-  byte present = 0;
-  byte data[12];
   byte addr[8];
   double te;
   server.sendContent(F("<!DOCTYPE html><html><head><title>Sensors</title>"));
@@ -309,7 +309,7 @@ void updatetime() {
   delay(1000);
   int cb = udp.parsePacket();
   if (cb) {
-    udp.read(packetBuffer, NTP_PACKET_SIZE);
+    udp.read(packetBuffer, 48);
     unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
     unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
     unsigned long secsSince1900 = highWord << 16 | lowWord;
@@ -321,10 +321,10 @@ void updatetime() {
   Serial.println(printDateTime(zegar));
 }
 
-unsigned long sendNTPpacket(IPAddress & address) {
+void sendNTPpacket(IPAddress & address) { //unsigned long
   Serial.println(F("Sending NTP packet..."));
   // set all bytes in the buffer to 0
-  memset(packetBuffer, 0, NTP_PACKET_SIZE);
+  memset(packetBuffer, 0, 48);
   // Initialize values needed to form NTP request
   // (see URL above for details on the packets)
   packetBuffer[0] = 0b11100011;   // LI, Version, Mode
@@ -340,15 +340,12 @@ unsigned long sendNTPpacket(IPAddress & address) {
   // all NTP fields have been given values, now
   // you can send a packet requesting a timestamp:
   udp.beginPacket(address, 123); //NTP requests are to port 123
-  udp.write(packetBuffer, NTP_PACKET_SIZE);
+  udp.write(packetBuffer, 48);
   udp.endPacket();
 }
 
 bool wifiConn (JsonObject &wifiset) {
-  bool dhcp;
-  String tmpdhcp = wifiset["ip"]["mode"]; //Messed up stuff
-  if (tmpdhcp == "dhcp") dhcp = true;     //Idk how to fix it into wifiConn
-  else if (tmpdhcp == "static") dhcp = false;
+  String tmpdhcp = wifiset["ip"]["mode"];
   String ip = wifiset["ip"]["ip"];
   String gate = wifiset["ip"]["gateway"];
   String sub = wifiset["ip"]["subnet"];
@@ -364,7 +361,7 @@ bool wifiConn (JsonObject &wifiset) {
     strcpy(passc, pass.c_str());
     //Serial.println(ssid);
     //Serial.println(password);
-    if (!dhcp) WiFi.config(stringToIP(ip), stringToIP(gate), stringToIP(sub));
+    if (tmpdhcp == "static") WiFi.config(stringToIP(ip), stringToIP(gate), stringToIP(sub));
     WiFi.begin(ssidc, passc);
     Serial.print("Connecting to ");
     Serial.println(ssid);
@@ -386,26 +383,22 @@ bool wifiConn (JsonObject &wifiset) {
     }
     Serial.print(F("Connected to "));
     Serial.print(ssid);
-    Serial.print(F(" \nIP address: "));
+    Serial.print(F("\nIP obtain mode: "));
+    if (tmpdhcp == "dhcp_stat" || tmpdhcp == "dhcp") {
+      if (tmpdhcp == "dhcp_stat") Serial.println(F("DHCP to static"));
+      if (tmpdhcp == "dhcp") Serial.println(F("DHCP"));
+      wifiset["ip"]["ip"] = IPtoString(WiFi.localIP());
+      wifiset["ip"]["gateway"] = IPtoString(WiFi.gatewayIP());
+      wifiset["ip"]["subnet"] = IPtoString(WiFi.subnetMask());
+      if (tmpdhcp == "dhcp_stat") wifiset["ip"]["mode"] = "static";
+    }
+    else Serial.println(F("Static"));
+    Serial.print(F("IP address: "));
     Serial.println(WiFi.localIP());
     Serial.print(F("Gateway: "));
     Serial.println(WiFi.gatewayIP());
     Serial.print(F("Subnet mask: "));
     Serial.println(WiFi.subnetMask());
-    Serial.print(F("IP obtain mode: "));
-    if (dhcp) Serial.println(F("DHCP"));
-    else Serial.println(F("Static"));
-    if (dhcp) {
-      if (SD.exists(DHCPFILE)) SD.remove(DHCPFILE); //Zrzut adresu IP
-      File root = SD.open(DHCPFILE, FILE_WRITE);
-      root.println("mode=dhcp");
-      root.print("ip="); root.println(WiFi.localIP());
-      root.flush();
-      root.print("gateway="); root.println(WiFi.gatewayIP());
-      root.print("subnet="); root.println(WiFi.subnetMask());
-      root.flush();
-      root.close();
-    }
     break;
   }
   return true;
