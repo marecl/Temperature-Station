@@ -16,8 +16,6 @@ String json = "";
 
 byte packetBuffer[48];
 
-unsigned int localPort = 2390;
-
 String workfile = "TEMP.CSV"; //If no time is available we will use this file
 //I should make function which will automatically clean up records and move to correct files
 

@@ -10,13 +10,13 @@
 #include <WiFiUdp.h>
 #include "defs.h"
 /*
+  Web updater!
+
   Read JSON directly from SDcard
 
   Encrypt password in file
 
   Add option to change/update date&time via http
-
-  Check if user wants internet connection
 */
 IPAddress timeServerIP;
 WiFiUDP udp;
@@ -105,7 +105,7 @@ void setup() {
     use_ntp = settings["use_ntp"];
     if (use_ntp) {
       delay(2500);
-      udp.begin(localPort);
+      udp.begin(2390);
       const char* ntpServerName = settings["ntp_server"];
       WiFi.hostByName(ntpServerName, timeServerIP);
       sendNTPpacket(timeServerIP);
@@ -122,7 +122,7 @@ void setup() {
         zegar.timezone = settings["timezone"];
         zegar.readRTC();
         if (!zegar.CompareTimeEpoch(epoch, 5)) {
-          Serial.println("Zegar zle chodzi. Ustawiam...");
+          Serial.println("Adjusting time...");
           zegar.setRTC(epoch);
         }
       }
