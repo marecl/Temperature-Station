@@ -4,7 +4,7 @@ It's using single JSON (saved as text) file to store all settings.
 
 Features:  
 	1. Single configuration file  
-	2. Easy configuration 
+	2. (quite) Easy configuration 
 	3. Stable
 
 	Definitions:  
