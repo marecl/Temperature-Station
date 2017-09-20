@@ -9,11 +9,11 @@
 #define MAX_SENSORS 16
 
 static bool httpserver = false;
-bool use_ntp = true;
+bool use_ntp = false;
+
+String json = "";
 int zone = 0;
 bool letni = true;
-String json = "";
-
 byte packetBuffer[48];
 
 String workfile = "TEMP.CSV"; //If no time is available we will use this file
@@ -21,26 +21,7 @@ String workfile = "TEMP.CSV"; //If no time is available we will use this file
 
 int valid_sensors = 0;
 int saved_ap = 0;
-
-void updateSettings(JsonObject& file){
-  if(SD.exists(SETTINGS_FILE)) SD.remove(SETTINGS_FILE);
-  File root = SD.open(SETTINGS_FILE , FILE_WRITE);
-  file.printTo(root);
-  root.close();
-}
-
-String printDateTime(Czas& timeobj) {
-  char datestring[20];
-  snprintf_P(datestring,
-             countof(datestring),
-             PSTR("%02u/%02u/%04u;%02u:%02u"),
-             timeobj.day,
-             timeobj.month,
-             timeobj.year,
-             timeobj.hour,
-             timeobj.minute );
-  return datestring;
-}
+double _temps_[MAX_SENSORS];
 
 IPAddress stringToIP(String input) {
   uint8_t parts[4] = {0, 0, 0, 0};
@@ -63,3 +44,15 @@ String IPtoString(IPAddress address) {
   return out;
 }
 
+String printDateTime(const RtcDateTime & dt) {
+  char datestring[20];
+  snprintf_P(datestring,
+             countof(datestring),
+             PSTR("%02u/%02u/%04u;%02u:%02u"),
+             dt.Day(),
+             dt.Month(),
+             dt.Year(),
+             dt.Hour(),
+             dt.Minute() );
+  return datestring;
+}

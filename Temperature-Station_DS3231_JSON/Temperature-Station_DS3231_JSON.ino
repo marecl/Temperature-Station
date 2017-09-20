@@ -1,13 +1,23 @@
 #include <ArduinoJson.h>
-#include <Czas.h> //PCF8563 library
 #include <DallasTemperature.h>
+#include <RtcDS3231.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
 #include <OneWire.h>
 #include <SD.h>
 #include <SPI.h>
+#include <Wire.h>
 #include <WiFiUdp.h>
 #include "defs.h"
+/*
+   This sketch needs hardware hack if you're using Chinese SD adapter
+
+   Solder 10kom resistor between 3V3 and SD detect pin (on shield)
+   and SD Detect pin to D0
+
+   SD Detect is connected to GND when SDcard is loaded.
+*/
+
 /*
   Web updater!
 
@@ -17,6 +27,7 @@
 
   Add option to change/update date&time via http
 */
+
 IPAddress timeServerIP;
 WiFiUDP udp;
 
@@ -27,13 +38,18 @@ DallasTemperature sensors(&oneWire);
 
 DynamicJsonBuffer jsonBuffer(750);
 
-Czas zegar(SDA, SCL); //SDA, SCL
+RtcDS3231<TwoWire> zegar(Wire);
+RtcDateTime teraz;
 
 void setup() {
+  pinMode(D0, INPUT);
+  Wire.begin(SDA, SCL);
   Serial.begin(115200);
   Serial.setDebugOutput(false);
   Serial.print("\n");
+  zegar.Begin();
   sensors.begin();
+  sensors.requestTemperatures();
 
   if (!digitalRead(SD_D)) {
     if (SD.begin(SD_CS)) {
@@ -109,12 +125,18 @@ void setup() {
         unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
         unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
         unsigned long secsSince1900 = highWord << 16 | lowWord;
-        unsigned long epoch = secsSince1900 - 2208988800UL;
-        zegar.timezone = settings["timezone"];
-        zegar.readRTC();
-        if (!zegar.CompareTimeEpoch(epoch, 5)) {
-          Serial.println("Adjusting time...");
-          zegar.setRTC(epoch);
+        unsigned long epoch = secsSince1900 - 2208988800UL - 946684800;
+        zone = settings["timezone"];
+        epoch += zone * 3600; //strefa
+        if (letni) epoch += 3600; //czas letni
+
+        teraz = zegar.GetDateTime();
+        if (RtcDateTime(epoch) != teraz) {
+          Serial.println(F("Adjusting time..."));
+          Serial.println("Before: " + (String)teraz);
+          zegar.SetDateTime(epoch);
+          teraz = zegar.GetDateTime();
+          Serial.println("After:  " + (String)teraz);
         }
       }
     }
@@ -126,6 +148,7 @@ void setup() {
     Serial.print((String)(a + 1) + "/" + (String)MAX_SENSORS + ": ");
     String xdtmp = settings["sensor"][a][0];
     Serial.print(xdtmp);
+
     if (getTemp(settings, a) != -127)
       Serial.println(" Connected");
     else
@@ -150,8 +173,8 @@ void loop() {
   //Uhnfortunately I can't pass object from setup()
 
   while (1) {
-    while ((zegar.minute % 5 != 0) && !digitalRead(SD_D)) {
-      zegar.readRTC();
+    while ((teraz.Minute() % 5 != 0) && !digitalRead(SD_D)) {
+      teraz = zegar.GetDateTime();
       if (httpserver)
         server.handleClient();
       else delay(10);
@@ -159,11 +182,10 @@ void loop() {
 
     if (!digitalRead(SD_D)) {
       sensors.requestTemperatures();
-      delay(150);
-      zegar.readRTC();
-      if (zegar.hour == 0 && zegar.minute == 0) createfile(settings);
+      teraz = zegar.GetDateTime();
+      if (teraz.Hour() == 0 && teraz.Minute() == 0) createfile(settings);
       File root = SD.open(workfile, FILE_WRITE);
-      root.print(printDateTime(zegar) + ";");
+      root.print(printDateTime(teraz) + ";");
       root.flush();
       for (int c = 0; c < valid_sensors; c++) {
         root.print(getTemp(settings, c), 1);
@@ -173,18 +195,18 @@ void loop() {
       }
       root.close();
     } else {
+      Serial.println(F("!!! NO SDCARD !!!"));
       while (digitalRead(SD_D)) delay(1000);
-      Serial.println(F("SD Card found. Reboot..."));
+      Serial.println(F("SD Card inserted. Reboot..."));
       ESP.restart();
     }
-    zegar.readRTC();
-  }
-
-  while ((zegar.minute % 5 == 0) && !digitalRead(SD_D)) {
-    zegar.readRTC();
-    if (httpserver)
-      server.handleClient();
-    else delay(10);
+    
+    while ((teraz.Minute() % 5 == 0) && !digitalRead(SD_D)) {
+      teraz = zegar.GetDateTime();
+      if (httpserver)
+        server.handleClient();
+      else delay(10);
+    }
   }
 }
 
@@ -221,17 +243,17 @@ void sensorSettings() {
   return;
 }
 
-void createfile(JsonObject & nameobj) {
-  String path = "archiwum/" + (String)zegar.year;
-  if (zegar.month < 10) path += "0" + (String)zegar.month;
-  else path += (String)zegar.month;
+void createfile(JsonObject &nameobj) {
+  String path = "archiwum/" + (String)teraz.Year();
+  if (teraz.Month() < 10) path += "0" + (String)teraz.Month();
+  else path += (String)teraz.Month();
   char* path2 = new char[path.length() + 1];
   strcpy(path2, path.c_str());
   SD.mkdir(path2);
 
   path += "/";
-  if (zegar.day < 10) path += "0" + (String)zegar.day + ".csv";
-  else path += (String)zegar.day + ".csv";
+  if (teraz.Day() < 10) path += "0" + (String)teraz.Day() + ".csv";
+  else path += (String)teraz.Day() + ".csv";
   path2 = new char[path.length() + 1];
   strcpy(path2, path.c_str());
   if (!SD.exists(path2)) {
@@ -254,7 +276,7 @@ void createfile(JsonObject & nameobj) {
 
 void updatetime() {
   Serial.print(F("Aktualizacja czasu!\nCzas przed: "));
-  Serial.println(printDateTime(zegar));
+  Serial.println(printDateTime(zegar.GetDateTime()));
   sendNTPpacket(timeServerIP);
   delay(1000);
   int cb = udp.parsePacket();
@@ -267,10 +289,10 @@ void updatetime() {
     unsigned long epoch = secsSince1900 - seventyYears - 946684800;
     epoch = zone * 3600; //strefa
     if (letni)epoch += 3600; //czas letni
-    zegar.setRTC(epoch);
+    zegar.SetDateTime(epoch);
   }
   Serial.print(F("Czas po: "));
-  Serial.println(printDateTime(zegar));
+  Serial.println(printDateTime(zegar.GetDateTime()));
 }
 
 void sendNTPpacket(IPAddress & address) { //unsigned long
@@ -296,7 +318,7 @@ void sendNTPpacket(IPAddress & address) { //unsigned long
   udp.endPacket();
 }
 
-bool wifiConn (JsonObject & wifiset) {
+bool wifiConn (JsonObject &wifiset) {
   String tmpdhcp = wifiset["ip"]["mode"];
   String ip = wifiset["ip"]["ip"];
   String gate = wifiset["ip"]["gateway"];
@@ -407,15 +429,19 @@ void handleFileUpload() {
   if (server.uri() != "/") return;
   HTTPUpload& upload = server.upload();
   if (upload.status == UPLOAD_FILE_START) {
-    if (SD.exists((char *)upload.filename.c_str())) SD.remove((char *)upload.filename.c_str());
+    if (SD.exists((char *)upload.filename.c_str()))
+      SD.remove((char *)upload.filename.c_str());
     uploadFile = SD.open(upload.filename.c_str(), FILE_WRITE);
-    Serial.print(F("Upload: START, filename: ")); Serial.println(upload.filename);
+    Serial.print(F("Upload: START, filename: "));
+    Serial.println(upload.filename);
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     if (uploadFile) uploadFile.write(upload.buf, upload.currentSize);
-    Serial.print(F("Upload: WRITE, Bytes: ")); Serial.println(upload.currentSize);
+    Serial.print(F("Upload: WRITE, Bytes: "));
+    Serial.println(upload.currentSize);
   } else if (upload.status == UPLOAD_FILE_END) {
     if (uploadFile) uploadFile.close();
-    Serial.print(F("Upload: END, Size: ")); Serial.println(upload.totalSize);
+    Serial.print(F("Upload: END, Size: "));
+    Serial.println(upload.totalSize);
   }
 }
 
@@ -516,7 +542,7 @@ void printDirectory() {
 }
 
 void handleNotFound() {
-  if (digitalRead(SD_D) && loadFromSdCard(server.uri())) return;
+  if (!digitalRead(SD_D) && loadFromSdCard(server.uri())) return;
   String message = F("PLIKU NIE ZNALEZIONO\n\n");
   message += F("URI: ");
   message += server.uri();
@@ -538,3 +564,4 @@ double getTemp(JsonObject & addrset, int row) {
     tempaddr[b] = addrset["sensor"][row][b + 1];
   return (round(10 * sensors.getTempC(tempaddr))) / 10;
 }
+
