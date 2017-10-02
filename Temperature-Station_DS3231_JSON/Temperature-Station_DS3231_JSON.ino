@@ -10,15 +10,17 @@
 #include <WiFiUdp.h>
 #include "defs.h"
 /*
-   This sketch needs hardware hack if you're using Chinese SD adapter
+  This sketch needs hardware hack if you're using Chinese SD adapter
 
-   Solder 10kom resistor between 3V3 and SD detect pin (on shield)
-   and SD Detect pin to D0
+  Solder 10kom resistor between 3V3 and SD detect pin (on shield)
+  and SD Detect pin to D0
 
-   SD Detect is connected to GND when SDcard is loaded.
+  SD Detect is connected to GND when SDcard is loaded.
 */
 
 /*
+   Move internal sensor outside or declare as builtin
+
   Web updater!
 
   Read JSON directly from SDcard
@@ -99,12 +101,13 @@ void setup() {
     server.on("/sensors", HTTP_GET, sensorSettings);
     server.on("/time", HTTP_GET, updatetime);
     server.on("/list", HTTP_GET, printDirectory);
+    server.on("/names", HTTP_GET, sensorNames);
     server.on("/", HTTP_DELETE, handleDelete);
     server.on("/", HTTP_PUT, handleCreate);
     server.on("/", HTTP_POST, []() {
       returnOK();
     }, handleFileUpload);
-    server.on("/settings.txt", HTTP_GET, returnForbidden);
+    //server.on("/settings.txt", HTTP_GET, returnForbidden);
     server.onNotFound(handleNotFound);
     server.begin();
     Serial.println(F("HTTP server started"));
@@ -136,7 +139,7 @@ void setup() {
           Serial.println("Before: " + (String)teraz);
           zegar.SetDateTime(epoch);
           teraz = zegar.GetDateTime();
-          Serial.println("After:  " + (String)teraz);
+          Serial.println("After: " + (String)teraz);
         }
       }
     }
@@ -156,6 +159,10 @@ void setup() {
   }
   Serial.println();
   createfile(settings);
+
+  settings["sensors"][0][0] = "XXYYYZZZ";
+  settings["valid_sensors"] = 15;
+  saveJson(settings);
 }
 
 void loop() {
@@ -175,9 +182,7 @@ void loop() {
   while (1) {
     while ((teraz.Minute() % 5 != 0) && !digitalRead(SD_D)) {
       teraz = zegar.GetDateTime();
-      if (httpserver)
-        server.handleClient();
-      else delay(10);
+      httpserver ? server.handleClient() : delay(10);
     }
 
     if (!digitalRead(SD_D)) {
@@ -189,7 +194,8 @@ void loop() {
       root.flush();
       for (int c = 0; c < valid_sensors; c++) {
         root.print(getTemp(settings, c), 1);
-        if (valid_sensors - c > 1) root.print(";");
+        if (c + 1 < valid_sensors)
+          root.print(";");
         else root.print("\r\n");
         root.flush();
       }
@@ -200,27 +206,53 @@ void loop() {
       Serial.println(F("SD Card inserted. Reboot..."));
       ESP.restart();
     }
-    
+
     while ((teraz.Minute() % 5 == 0) && !digitalRead(SD_D)) {
       teraz = zegar.GetDateTime();
-      if (httpserver)
-        server.handleClient();
-      else delay(10);
+      httpserver ? server.handleClient() : delay(10);
     }
   }
 }
 
+void saveJson(JsonObject &toSave) {
+  SD.remove("NIBB.TXT");
+  File root = SD.open("NIBB.TXT", FILE_WRITE);
+  toSave.prettyPrintTo(root);
+  root.flush();
+  root.close();
+}
+
 void sensorSettings() {
+  StaticJsonBuffer<1500> sensBuff;
   sensors.requestTemperatures();
+
+  File root = SD.open(SETTINGS_FILE , FILE_READ);
+  int tmp = root.read();
+  json = "";
+  while (tmp != -1) {
+    if (tmp != 32 && tmp != 9)
+      json += (char)tmp;
+    tmp = root.read();
+  }
+  root.close();
+
+  JsonObject& sensSet = sensBuff.parseObject(json);
+
+  if (!sensSet.success())
+    return;
   byte i;
   byte addr[8];
   double te;
+  String temp = "";
+
+
   server.sendContent(F("<!DOCTYPE html><html><head><title>Sensors</title>"));
-  server.sendContent(F("<meta http-equiv=\"refresh\" content=\"15\">"));
+  //server.sendContent(F("<meta http-equiv=\"refresh\" content=\"30\">"));
   server.sendContent(F("<style>table,th,td{border:1px solid black;"));
   server.sendContent(F("text-align:center}</style></head>"));
   server.sendContent(F("<body><table><caption><b>Available sensors</b></caption>"));
-  server.sendContent(F("<tr><th>Address (DEC)</th><th>Temperature</th>"));
+  server.sendContent(F("<tr><th>Address (DEC)</th><th>Temperature</th><th>Name</th>"));
+
   while (oneWire.search(addr)) {
     server.sendContent(F("<tr><td>"));
     for (i = 0; i < 8; i++) {
@@ -236,14 +268,33 @@ void sensorSettings() {
     }
     server.sendContent(F("</td><td>"));
     te = sensors.getTempC(addr);
-    server.sendContent((String)te);
+    server.sendContent((String)te + (char)176 + "C");
+    server.sendContent(F("</td><td>"));
+
+    for (int row = 0; row < valid_sensors; row++) {
+      for (int b = 0; b < 8; b++) {
+        if (addr[b] != sensSet["sensor"][row][b + 1])
+          break;
+        else if (b == 7) {
+          String tempname = sensSet["sensor"][row][0];
+          temp = tempname;
+        }
+      }
+    }
+
+    server.sendContent(temp);
     server.sendContent(F("</td></tr>"));
   }
   server.sendContent(F("</table></body></html>"));
   return;
 }
 
-void createfile(JsonObject &nameobj) {
+void sensorNames(){
+  server.sendContent(F("<!DOCTYPE html><html><body><button type=\"button\""));
+  server.sendContent(F("onclick=\"alert('Hello world!')\">Click Me!</button></body></html>"));
+}
+
+void createfile(JsonObject & nameobj) {
   String path = "archiwum/" + (String)teraz.Year();
   if (teraz.Month() < 10) path += "0" + (String)teraz.Month();
   else path += (String)teraz.Month();
@@ -301,15 +352,15 @@ void sendNTPpacket(IPAddress & address) { //unsigned long
   memset(packetBuffer, 0, 48);
   // Initialize values needed to form NTP request
   // (see URL above for details on the packets)
-  packetBuffer[0] = 0b11100011;   // LI, Version, Mode
-  packetBuffer[1] = 0;     // Stratum, or type of clock
-  packetBuffer[2] = 6;     // Polling Interval
-  packetBuffer[3] = 0xEC;  // Peer Clock Precision
+  packetBuffer[0] = 0b11100011; // LI, Version, Mode
+  packetBuffer[1] = 0; // Stratum, or type of clock
+  packetBuffer[2] = 6; // Polling Interval
+  packetBuffer[3] = 0xEC; // Peer Clock Precision
   // 8 bytes of zero for Root Delay & Root Dispersion
-  packetBuffer[12]  = 49;
-  packetBuffer[13]  = 0x4E;
-  packetBuffer[14]  = 49;
-  packetBuffer[15]  = 52;
+  packetBuffer[12] = 49;
+  packetBuffer[13] = 0x4E;
+  packetBuffer[14] = 49;
+  packetBuffer[15] = 52;
 
   // all NTP fields have been given values, now
   // you can send a packet requesting a timestamp:
@@ -318,13 +369,14 @@ void sendNTPpacket(IPAddress & address) { //unsigned long
   udp.endPacket();
 }
 
-bool wifiConn (JsonObject &wifiset) {
+bool wifiConn (JsonObject & wifiset) {
   String tmpdhcp = wifiset["ip"]["mode"];
   String ip = wifiset["ip"]["ip"];
   String gate = wifiset["ip"]["gateway"];
   String sub = wifiset["ip"]["subnet"];
   saved_ap = wifiset["saved_ap"];
 
+  WiFi.mode(WIFI_STA); //WIFI_AP, WIFI_STA, WIFI_AP_STA
   for (int xxx = 0; xxx < saved_ap; xxx++) {
     String ssid = wifiset["wlan"][xxx][0];
     String pass = wifiset["wlan"][xxx][1];
@@ -562,6 +614,6 @@ double getTemp(JsonObject & addrset, int row) {
   byte tempaddr[8];
   for (int b = 0; b < 8; b++)
     tempaddr[b] = addrset["sensor"][row][b + 1];
-  return (round(10 * sensors.getTempC(tempaddr))) / 10;
+  return sensors.getTempC(tempaddr);
 }
 

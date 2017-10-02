@@ -34,7 +34,6 @@ void setup() {
   Serial.setDebugOutput(false);
   Serial.print("\n");
   sensors.begin();
-
   if (!digitalRead(SD_D)) {
     if (SD.begin(SD_CS)) {
       Serial.println(F("SD Card initialized"));
@@ -112,9 +111,12 @@ void setup() {
         unsigned long epoch = secsSince1900 - 2208988800UL;
         zegar.timezone = settings["timezone"];
         zegar.readRTC();
+        Serial.println(printDateTime(zegar));
         if (!zegar.CompareTimeEpoch(epoch, 5)) {
           Serial.println("Adjusting time...");
           zegar.setRTC(epoch);
+          zegar.readRTC();
+          Serial.println(printDateTime(zegar));
         }
       }
     }
@@ -150,7 +152,7 @@ void loop() {
   //Uhnfortunately I can't pass object from setup()
 
   while (1) {
-    while ((zegar.minute % 5 != 0) && !digitalRead(SD_D)) {
+    while (((zegar.minute % 5) != 0) && !digitalRead(SD_D)) {
       zegar.readRTC();
       if (httpserver)
         server.handleClient();
@@ -161,30 +163,32 @@ void loop() {
       sensors.requestTemperatures();
       delay(150);
       zegar.readRTC();
-      if (zegar.hour == 0 && zegar.minute == 0) createfile(settings);
-      File root = SD.open(workfile, FILE_WRITE);
-      root.print(printDateTime(zegar) + ";");
-      root.flush();
-      for (int c = 0; c < valid_sensors; c++) {
-        root.print(getTemp(settings, c), 1);
-        if (valid_sensors - c > 1) root.print(";");
-        else root.print("\r\n");
+      if (!(zegar.day > 31 || zegar.month > 12 || zegar.minute > 59 || zegar.hour > 23)) {
+        if (zegar.hour == 0 && zegar.minute == 0) createfile(settings);
+        File root = SD.open(workfile, FILE_WRITE);
+        root.print(printDateTime(zegar) + ";");
         root.flush();
+        for (int c = 0; c < valid_sensors; c++) {
+          root.print(getTemp(settings, c), 1);
+          if (valid_sensors - c > 1) root.print(";");
+          else root.print("\r\n");
+          root.flush();
+        }
+        root.close();
       }
-      root.close();
     } else {
+      Serial.println("NO SDCARD!");
       while (digitalRead(SD_D)) delay(1000);
       Serial.println(F("SD Card found. Reboot..."));
       ESP.restart();
     }
-    zegar.readRTC();
-  }
 
-  while ((zegar.minute % 5 == 0) && !digitalRead(SD_D)) {
-    zegar.readRTC();
-    if (httpserver)
-      server.handleClient();
-    else delay(10);
+    while (((zegar.minute % 5) == 0) && !digitalRead(SD_D)) {
+      zegar.readRTC();
+      if (httpserver)
+        server.handleClient();
+      else delay(10);
+    }
   }
 }
 
@@ -303,6 +307,7 @@ bool wifiConn (JsonObject & wifiset) {
   String sub = wifiset["ip"]["subnet"];
   saved_ap = wifiset["saved_ap"];
 
+  WiFi.mode(WIFI_STA); //WIFI_AP, WIFI_STA, WIFI_AP_STA
   for (int xxx = 0; xxx < saved_ap; xxx++) {
     String ssid = wifiset["wlan"][xxx][0];
     String pass = wifiset["wlan"][xxx][1];
@@ -516,7 +521,7 @@ void printDirectory() {
 }
 
 void handleNotFound() {
-  if (digitalRead(SD_D) && loadFromSdCard(server.uri())) return;
+  if (!digitalRead(SD_D) && loadFromSdCard(server.uri())) return;
   String message = F("PLIKU NIE ZNALEZIONO\n\n");
   message += F("URI: ");
   message += server.uri();
