@@ -38,7 +38,7 @@ ESP8266WebServer server(80);
 OneWire oneWire(OW_PORT);
 DallasTemperature sensors(&oneWire);
 
-DynamicJsonBuffer jsonBuffer(750);
+DynamicJsonBuffer jsonBuffer(1000);
 
 RtcDS3231<TwoWire> zegar(Wire);
 RtcDateTime teraz;
@@ -101,13 +101,12 @@ void setup() {
     server.on("/sensors", HTTP_GET, sensorSettings);
     server.on("/time", HTTP_GET, updatetime);
     server.on("/list", HTTP_GET, printDirectory);
-    server.on("/names", HTTP_GET, sensorNames);
     server.on("/", HTTP_DELETE, handleDelete);
     server.on("/", HTTP_PUT, handleCreate);
     server.on("/", HTTP_POST, []() {
       returnOK();
     }, handleFileUpload);
-    //server.on("/settings.txt", HTTP_GET, returnForbidden);
+    //server.on("/settings.txt", returnForbidden);
     server.onNotFound(handleNotFound);
     server.begin();
     Serial.println(F("HTTP server started"));
@@ -159,10 +158,6 @@ void setup() {
   }
   Serial.println();
   createfile(settings);
-
-  settings["sensors"][0][0] = "XXYYYZZZ";
-  settings["valid_sensors"] = 15;
-  saveJson(settings);
 }
 
 void loop() {
@@ -215,15 +210,16 @@ void loop() {
 }
 
 void saveJson(JsonObject &toSave) {
-  SD.remove("NIBB.TXT");
-  File root = SD.open("NIBB.TXT", FILE_WRITE);
+  if (SD.exists(SETTINGS_FILE))
+    SD.remove(SETTINGS_FILE);
+  File root = SD.open(SETTINGS_FILE, FILE_WRITE);
   toSave.prettyPrintTo(root);
   root.flush();
   root.close();
 }
 
 void sensorSettings() {
-  StaticJsonBuffer<1500> sensBuff;
+  DynamicJsonBuffer sensBuff(1000);
   sensors.requestTemperatures();
 
   File root = SD.open(SETTINGS_FILE , FILE_READ);
@@ -240,11 +236,23 @@ void sensorSettings() {
 
   if (!sensSet.success())
     return;
+
+  String changeName;
+  int changePos;
+
+  if (server.args() == 2) {
+    changePos = atoi((server.arg("sensorRow")).c_str());
+    changeName = server.arg("Sensor");
+    
+    sensSet["sensor"][changePos][0] = changeName;
+    saveJson(sensSet);
+  }
+
   byte i;
   byte addr[8];
   double te;
   String temp = "";
-
+  int sensorRow = 0;
 
   server.sendContent(F("<!DOCTYPE html><html><head><title>Sensors</title>"));
   //server.sendContent(F("<meta http-equiv=\"refresh\" content=\"30\">"));
@@ -267,9 +275,6 @@ void sensorSettings() {
       return;
     }
     server.sendContent(F("</td><td>"));
-    te = sensors.getTempC(addr);
-    server.sendContent((String)te + (char)176 + "C");
-    server.sendContent(F("</td><td>"));
 
     for (int row = 0; row < valid_sensors; row++) {
       for (int b = 0; b < 8; b++) {
@@ -278,18 +283,39 @@ void sensorSettings() {
         else if (b == 7) {
           String tempname = sensSet["sensor"][row][0];
           temp = tempname;
+          sensorRow = row;
         }
       }
     }
 
-    server.sendContent(temp);
+    /*String sensorName = "";
+      for (int a = 0; a < 8; a++) {
+      sensorName += String(addr[a]);
+      }
+      Serial.println(sensorName);*/
+
+    te = sensors.getTempC(addr);
+    server.sendContent((String)te + (char)176 + "C");
+    server.sendContent(F("</td><td>"));
+
+    server.sendContent(F("<form>"));
+    server.sendContent(F("<input type = \"hidden\" name = \"sensorRow\" value = "));
+    server.sendContent(String(sensorRow)); //Position in file
+
+    server.sendContent(F("><input type = \"text\" name = Sensor "));
+    server.sendContent(F("value = "));
+    server.sendContent(temp); //Sensor name
+
+
+    server.sendContent(F("><input type = \"submit\" value = \"Save\">"));
+    server.sendContent(F("</form>"));
     server.sendContent(F("</td></tr>"));
   }
   server.sendContent(F("</table></body></html>"));
   return;
 }
 
-void sensorNames(){
+void sensorNames() {
   server.sendContent(F("<!DOCTYPE html><html><body><button type=\"button\""));
   server.sendContent(F("onclick=\"alert('Hello world!')\">Click Me!</button></body></html>"));
 }
@@ -432,11 +458,7 @@ void returnFail(String msg) {
 }
 
 void returnForbidden() {
-  String output = "<html>\r\n";
-  output += "<h1>403 FORBIDDEN</h1>\r\n";
-  output += "</html>";
-  server.send(403, "text/html", output);
-  Serial.println(F("Somebody tried to access password file!"));
+  server.send(403, "text/plain", "Access Denied\r\n");
 }
 
 bool loadFromSdCard(String path) {
