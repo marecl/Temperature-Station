@@ -23,6 +23,25 @@ int valid_sensors = 0;
 int saved_ap = 0;
 double _temps_[MAX_SENSORS];
 
+bool isMember(byte _1[], JsonObject& compObj, int _size) {
+  for (int a = 0; a < _size; a++) {
+    for (int b = 0; b < 8; b++) {
+      byte _2 = compObj["sensor"][a][b + 1];
+      if (_1[b] != _2)
+        break;
+      else if (b == 7) return true;
+    }
+  }
+  return false;
+}
+
+String addrToString(uint8_t _addr[8]) {
+  String out = "";
+  for (int a = 0; a < 8; a++)
+    out += String(_addr[a]);
+  return out;
+}
+
 IPAddress stringToIP(String input) {
   uint8_t parts[4] = {0, 0, 0, 0};
   uint8_t part = 0;

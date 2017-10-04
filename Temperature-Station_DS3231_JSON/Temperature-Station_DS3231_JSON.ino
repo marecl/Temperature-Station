@@ -19,7 +19,7 @@
 */
 
 /*
-   Move internal sensor outside or declare as builtin
+  !!! Napraw usuwanie czujek (przesuniecie przy usuwaniu) !!!
 
   Web updater!
 
@@ -55,7 +55,7 @@ void setup() {
 
   if (!digitalRead(SD_D)) {
     if (SD.begin(SD_CS)) {
-      Serial.println(F("SD Card initialized"));
+      Serial.println(F("TemperatureStation DS3231v1.0"));
       if (!SD.exists(SETTINGS_FILE)) {
         Serial.println(F("No settings file!"));
         delay(1000);
@@ -117,29 +117,15 @@ void setup() {
       udp.begin(2390);
       const char* ntpServerName = settings["ntp_server"];
       WiFi.hostByName(ntpServerName, timeServerIP);
-      sendNTPpacket(timeServerIP);
-      delay(1000);
-      int cb = udp.parsePacket();
-      if (!cb)
-        Serial.println(F("Received invalid NTP data"));
-      else {
-        udp.read(packetBuffer, 48);
-        unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
-        unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
-        unsigned long secsSince1900 = highWord << 16 | lowWord;
-        unsigned long epoch = secsSince1900 - 2208988800UL - 946684800;
-        zone = settings["timezone"];
-        epoch += zone * 3600; //strefa
-        if (letni) epoch += 3600; //czas letni
+      unsigned long newTime = updateNTP();
 
+      teraz = zegar.GetDateTime();
+      if (RtcDateTime(newTime) != teraz) {
+        Serial.println(F("Adjusting time..."));
+        Serial.println("Before: " + (String)teraz);
+        zegar.SetDateTime(newTime);
         teraz = zegar.GetDateTime();
-        if (RtcDateTime(epoch) != teraz) {
-          Serial.println(F("Adjusting time..."));
-          Serial.println("Before: " + (String)teraz);
-          zegar.SetDateTime(epoch);
-          teraz = zegar.GetDateTime();
-          Serial.println("After: " + (String)teraz);
-        }
+        Serial.println("After: " + (String)teraz);
       }
     }
   }
@@ -231,7 +217,6 @@ void sensorSettings() {
     tmp = root.read();
   }
   root.close();
-
   JsonObject& sensSet = sensBuff.parseObject(json);
 
   if (!sensSet.success())
@@ -240,28 +225,76 @@ void sensorSettings() {
   String changeName;
   int changePos;
 
-  if (server.args() == 2) {
-    changePos = atoi((server.arg("sensorRow")).c_str());
-    changeName = server.arg("Sensor");
-    
-    sensSet["sensor"][changePos][0] = changeName;
-    saveJson(sensSet);
+  /*
+    Tu naprawic usuwanie
+  */
+  if (server.args() != 0) {
+    for (int x = 0; x < server.args(); x ++) {
+      if (server.argName(x) == "Remove") {
+        JsonArray& setMain = sensSet["sensor"];
+        setMain.remove((atoi((server.arg(x)).c_str())));
+        valid_sensors--;
+        sensSet["valid_sensors"] = valid_sensors;
+        saveJson(sensSet);
+        //returnFail("Saved. Rebooting...");
+        //delay(1000);
+        //ESP.restart();
+      } else {
+        changePos = atoi((server.argName(x)).c_str());
+        changeName = server.arg(x);
+        sensSet["sensor"][changePos][0] = changeName;
+        saveJson(sensSet);
+      }
+    }
   }
 
   byte i;
   byte addr[8];
-  double te;
-  String temp = "";
-  int sensorRow = 0;
+  String temp;
+  int sensorRow;
 
   server.sendContent(F("<!DOCTYPE html><html><head><title>Sensors</title>"));
-  //server.sendContent(F("<meta http-equiv=\"refresh\" content=\"30\">"));
   server.sendContent(F("<style>table,th,td{border:1px solid black;"));
   server.sendContent(F("text-align:center}</style></head>"));
   server.sendContent(F("<body><table><caption><b>Available sensors</b></caption>"));
   server.sendContent(F("<tr><th>Address (DEC)</th><th>Temperature</th><th>Name</th>"));
+  server.sendContent(F("<form>"));
+
+
+  for (int a = 0; a < valid_sensors; a++) {
+    server.sendContent(F("<tr><td>"));
+    for (int b = 0; b < 8; b++)
+      addr[b] = sensSet["sensor"][a][b + 1];
+
+    for (i = 0; i < 8; i++) {
+      if (addr[i] < 100) server.sendContent("0");
+      if (addr[i] < 10) server.sendContent("0");
+      server.sendContent((String)addr[i]);
+      if (i < 7)
+        server.sendContent(",");
+    }
+    server.sendContent(F("</td><td>"));
+    if (getTemp(sensSet, a) != -127)
+      server.sendContent((String)sensors.getTempC(addr) + (char)176 + "C");
+    else
+      server.sendContent("N/C");
+
+    server.sendContent(F("</td><td>"));
+    String tempName = sensSet["sensor"][a][0];
+
+    server.sendContent(F("<input type = \"text\" name = "));
+    server.sendContent(String(a)); //Position in file
+    server.sendContent(F(" value = "));
+    server.sendContent(tempName);
+    server.sendContent(F("><input type=\"checkbox\" name=\"Remove\" value= "));
+    server.sendContent(String(a)); //Position in file
+    server.sendContent(F("></td></tr>"));
+  }
 
   while (oneWire.search(addr)) {
+    if (isMember(addr, sensSet, valid_sensors))
+      continue;
+
     server.sendContent(F("<tr><td>"));
     for (i = 0; i < 8; i++) {
       if (addr[i] < 100) server.sendContent("0");
@@ -274,50 +307,36 @@ void sensorSettings() {
       server.sendContent(F("Invalid CRC!"));
       return;
     }
+
     server.sendContent(F("</td><td>"));
 
-    for (int row = 0; row < valid_sensors; row++) {
-      for (int b = 0; b < 8; b++) {
-        if (addr[b] != sensSet["sensor"][row][b + 1])
-          break;
-        else if (b == 7) {
-          String tempname = sensSet["sensor"][row][0];
-          temp = tempname;
-          sensorRow = row;
-        }
-      }
-    }
+    valid_sensors += 1;
+    sensSet["valid_sensors"] = valid_sensors;
+    String tempname = addrToString(addr);
+    JsonArray& setMain = sensSet["sensor"];
+    JsonArray& newSet = setMain.createNestedArray();
+    newSet.add(tempname);
+    for (int x = 0; x < 8; x++)
+      newSet.add(addr[x]);
+    sensorRow = valid_sensors - 1;
+    saveJson(sensSet);
 
-    /*String sensorName = "";
-      for (int a = 0; a < 8; a++) {
-      sensorName += String(addr[a]);
-      }
-      Serial.println(sensorName);*/
-
-    te = sensors.getTempC(addr);
-    server.sendContent((String)te + (char)176 + "C");
+    server.sendContent((String)sensors.getTempC(addr) + (char)176 + "C");
     server.sendContent(F("</td><td>"));
-
-    server.sendContent(F("<form>"));
-    server.sendContent(F("<input type = \"hidden\" name = \"sensorRow\" value = "));
+    server.sendContent(F("<input type = \"text\" name = "));
     server.sendContent(String(sensorRow)); //Position in file
-
-    server.sendContent(F("><input type = \"text\" name = Sensor "));
-    server.sendContent(F("value = "));
-    server.sendContent(temp); //Sensor name
-
-
-    server.sendContent(F("><input type = \"submit\" value = \"Save\">"));
-    server.sendContent(F("</form>"));
-    server.sendContent(F("</td></tr>"));
+    server.sendContent(F(" value = "));
+    server.sendContent(F("UNKNOWN_NEW")); //Sensor name
+    server.sendContent(F("><input type=\"checkbox\" name=\"Remove\" value= "));
+    server.sendContent(String(sensorRow)); //Position in file
+    server.sendContent(F("></td></tr>"));
   }
+  server.sendContent(F("<button type=\"submit\" value=\"Save\">Save Changes</button>"));
+  server.sendContent(F("<button type=\"reset\" value=\"Reset\">Reset</button>"));
+  server.sendContent(F("</form>"));
+
   server.sendContent(F("</table></body></html>"));
   return;
-}
-
-void sensorNames() {
-  server.sendContent(F("<!DOCTYPE html><html><body><button type=\"button\""));
-  server.sendContent(F("onclick=\"alert('Hello world!')\">Click Me!</button></body></html>"));
 }
 
 void createfile(JsonObject & nameobj) {
@@ -354,22 +373,30 @@ void createfile(JsonObject & nameobj) {
 void updatetime() {
   Serial.print(F("Aktualizacja czasu!\nCzas przed: "));
   Serial.println(printDateTime(zegar.GetDateTime()));
+
+
+
+  Serial.print(F("Czas po: "));
+  Serial.println(printDateTime(zegar.GetDateTime()));
+}
+
+unsigned long updateNTP() {
   sendNTPpacket(timeServerIP);
   delay(1000);
   int cb = udp.parsePacket();
+  unsigned long epoch;
   if (cb) {
     udp.read(packetBuffer, 48);
     unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
     unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
     unsigned long secsSince1900 = highWord << 16 | lowWord;
     const unsigned long seventyYears = 2208988800UL;
-    unsigned long epoch = secsSince1900 - seventyYears - 946684800;
-    epoch = zone * 3600; //strefa
+    epoch = secsSince1900 - seventyYears - 946684800;
+    epoch += zone * 3600; //strefa
     if (letni)epoch += 3600; //czas letni
-    zegar.SetDateTime(epoch);
   }
-  Serial.print(F("Czas po: "));
-  Serial.println(printDateTime(zegar.GetDateTime()));
+  else return false;
+  return epoch;
 }
 
 void sendNTPpacket(IPAddress & address) { //unsigned long
