@@ -19,20 +19,12 @@
 */
 
 /*
-  !!! Napraw usuwanie czujek (przesuniecie przy usuwaniu) !!!
-
   Web updater!
-
-  Read JSON directly from SDcard
 
   Encrypt password in file
 
   Add option to change/update date&time via http
 */
-
-IPAddress timeServerIP;
-WiFiUDP udp;
-
 ESP8266WebServer server(80);
 
 OneWire oneWire(OW_PORT);
@@ -42,13 +34,12 @@ DynamicJsonBuffer jsonBuffer(1000);
 
 RtcDS3231<TwoWire> zegar(Wire);
 RtcDateTime teraz;
-
 void setup() {
-  pinMode(D0, INPUT);
-  Wire.begin(SDA, SCL);
   Serial.begin(115200);
   Serial.setDebugOutput(false);
-  Serial.print("\n");
+  pinMode(D0, INPUT);
+  Wire.begin(SDA, SCL);
+  Serial.print(F("\n"));
   zegar.Begin();
   sensors.begin();
   sensors.requestTemperatures();
@@ -89,8 +80,9 @@ void setup() {
     ESP.restart();
   }
 
-  if (wifiConn(settings))
+  if (wifiConn(settings)) {
     httpserver = true;
+  }
   else {
     Serial.print(F("Could not connect to WiFi!\n"));
     Serial.print(F("Log mode only\n"));
@@ -113,11 +105,7 @@ void setup() {
 
     use_ntp = settings["use_ntp"];
     if (use_ntp) {
-      delay(2500);
-      udp.begin(2390);
-      const char* ntpServerName = settings["ntp_server"];
-      WiFi.hostByName(ntpServerName, timeServerIP);
-      unsigned long newTime = updateNTP();
+      unsigned long newTime = updateNTP(settings);
 
       teraz = zegar.GetDateTime();
       if (RtcDateTime(newTime) != teraz) {
@@ -138,9 +126,9 @@ void setup() {
     Serial.print(xdtmp);
 
     if (getTemp(settings, a) != -127)
-      Serial.println(" Connected");
+      Serial.println(F(" Connected"));
     else
-      Serial.println(" N/C");
+      Serial.println(F(" N/C"));
   }
   Serial.println();
   createfile(settings);
@@ -176,8 +164,8 @@ void loop() {
       for (int c = 0; c < valid_sensors; c++) {
         root.print(getTemp(settings, c), 1);
         if (c + 1 < valid_sensors)
-          root.print(";");
-        else root.print("\r\n");
+          root.print(F(";"));
+        else root.print(F("\r\n"));
         root.flush();
       }
       root.close();
@@ -195,18 +183,9 @@ void loop() {
   }
 }
 
-void saveJson(JsonObject &toSave) {
-  if (SD.exists(SETTINGS_FILE))
-    SD.remove(SETTINGS_FILE);
-  File root = SD.open(SETTINGS_FILE, FILE_WRITE);
-  toSave.prettyPrintTo(root);
-  root.flush();
-  root.close();
-}
-
 void sensorSettings() {
-  DynamicJsonBuffer sensBuff(1000);
   sensors.requestTemperatures();
+  DynamicJsonBuffer sensBuff(1000);
 
   File root = SD.open(SETTINGS_FILE , FILE_READ);
   int tmp = root.read();
@@ -225,20 +204,16 @@ void sensorSettings() {
   String changeName;
   int changePos;
 
-  /*
-    Tu naprawic usuwanie
-  */
   if (server.args() != 0) {
-    for (int x = 0; x < server.args(); x ++) {
+    for (int x = server.args() - 1; x >= 0; x--) {
       if (server.argName(x) == "Remove") {
         JsonArray& setMain = sensSet["sensor"];
         setMain.remove((atoi((server.arg(x)).c_str())));
         valid_sensors--;
         sensSet["valid_sensors"] = valid_sensors;
         saveJson(sensSet);
-        //returnFail("Saved. Rebooting...");
-        //delay(1000);
-        //ESP.restart();
+        if ((server.arg(x) == server.argName(x - 1)) && x > 0)
+          x -= 1;
       } else {
         changePos = atoi((server.argName(x)).c_str());
         changeName = server.arg(x);
@@ -246,6 +221,10 @@ void sensorSettings() {
         saveJson(sensSet);
       }
     }
+    server.sendContent(F("HTTP/1.1 307 Temporary Redirect\r\n"));
+    server.sendContent(F("Location: /sensors\r\n"));
+    server.sendContent(F("Connection: Close\r\n\r\n"));
+    return;
   }
 
   byte i;
@@ -267,17 +246,17 @@ void sensorSettings() {
       addr[b] = sensSet["sensor"][a][b + 1];
 
     for (i = 0; i < 8; i++) {
-      if (addr[i] < 100) server.sendContent("0");
-      if (addr[i] < 10) server.sendContent("0");
+      if (addr[i] < 100) server.sendContent(F("0"));
+      if (addr[i] < 10) server.sendContent(F("0"));
       server.sendContent((String)addr[i]);
       if (i < 7)
-        server.sendContent(",");
+        server.sendContent(F(","));
     }
     server.sendContent(F("</td><td>"));
     if (getTemp(sensSet, a) != -127)
       server.sendContent((String)sensors.getTempC(addr) + (char)176 + "C");
     else
-      server.sendContent("N/C");
+      server.sendContent(F("N/C"));
 
     server.sendContent(F("</td><td>"));
     String tempName = sensSet["sensor"][a][0];
@@ -287,7 +266,7 @@ void sensorSettings() {
     server.sendContent(F(" value = "));
     server.sendContent(tempName);
     server.sendContent(F("><input type=\"checkbox\" name=\"Remove\" value= "));
-    server.sendContent(String(a)); //Position in file
+    server.sendContent(String(a));
     server.sendContent(F("></td></tr>"));
   }
 
@@ -297,11 +276,11 @@ void sensorSettings() {
 
     server.sendContent(F("<tr><td>"));
     for (i = 0; i < 8; i++) {
-      if (addr[i] < 100) server.sendContent("0");
-      if (addr[i] < 10) server.sendContent("0");
+      if (addr[i] < 100) server.sendContent(F("0"));
+      if (addr[i] < 10) server.sendContent(F("0"));
       server.sendContent((String)addr[i]);
       if (i < 7)
-        server.sendContent(",");
+        server.sendContent(F(","));
     }
     if (OneWire::crc8(addr, 7) != addr[7]) {
       server.sendContent(F("Invalid CRC!"));
@@ -355,13 +334,13 @@ void createfile(JsonObject & nameobj) {
   if (!SD.exists(path2)) {
     File dest = SD.open(path2, FILE_WRITE);
 
-    dest.print("Date;Time;");
+    dest.print(F("Date;Time;"));
     dest.flush();
     for (int c = 0; c < valid_sensors; c++) {
       String tempname = nameobj["sensor"][c][0];
       dest.print(tempname);
-      if (valid_sensors - c > 1) dest.print(";");
-      else dest.print("\r\n");
+      if (valid_sensors - c > 1) dest.print(F(";"));
+      else dest.print(F("\r\n"));
       dest.flush();
     }
     dest.close();
@@ -371,40 +350,41 @@ void createfile(JsonObject & nameobj) {
 }
 
 void updatetime() {
-  Serial.print(F("Aktualizacja czasu!\nCzas przed: "));
-  Serial.println(printDateTime(zegar.GetDateTime()));
+  /*Serial.print(F("Aktualizacja czasu!\nCzas przed: "));
+    Serial.println(printDateTime(zegar));
 
+    Serial.print(F("Czas po: "));
+    Serial.println(printDateTime(zegar));*/
 
-
-  Serial.print(F("Czas po: "));
-  Serial.println(printDateTime(zegar.GetDateTime()));
+  server.sendContent(F("HTTP/1.1 307 Temporary Redirect\r\n"));
+  server.sendContent(F("Location: /\r\n"));
+  server.sendContent(F("Connection: Close\r\n\r\n"));
 }
 
-unsigned long updateNTP() {
-  sendNTPpacket(timeServerIP);
+unsigned long updateNTP(JsonObject& timeSet) {
+  WiFiUDP udp;
+  IPAddress timeServerIP;
+  udp.begin(2390);
+  const char* ntpServerName = timeSet["ntp_server"];
+  WiFi.hostByName(ntpServerName, timeServerIP);
+  sendNTPpacket(timeServerIP, udp);
+
   delay(1000);
-  int cb = udp.parsePacket();
-  unsigned long epoch;
-  if (cb) {
+  if (udp.parsePacket()) {
     udp.read(packetBuffer, 48);
     unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
     unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
     unsigned long secsSince1900 = highWord << 16 | lowWord;
-    const unsigned long seventyYears = 2208988800UL;
-    epoch = secsSince1900 - seventyYears - 946684800;
-    epoch += zone * 3600; //strefa
-    if (letni)epoch += 3600; //czas letni
+    return (secsSince1900 - 2208988800UL + zone * 3600 + (int)letni * 3600);
   }
   else return false;
-  return epoch;
 }
 
-void sendNTPpacket(IPAddress & address) { //unsigned long
+void sendNTPpacket(IPAddress & address, WiFiUDP& _udp) {
   Serial.println(F("Sending NTP packet..."));
-  // set all bytes in the buffer to 0
+
   memset(packetBuffer, 0, 48);
-  // Initialize values needed to form NTP request
-  // (see URL above for details on the packets)
+
   packetBuffer[0] = 0b11100011; // LI, Version, Mode
   packetBuffer[1] = 0; // Stratum, or type of clock
   packetBuffer[2] = 6; // Polling Interval
@@ -415,11 +395,9 @@ void sendNTPpacket(IPAddress & address) { //unsigned long
   packetBuffer[14] = 49;
   packetBuffer[15] = 52;
 
-  // all NTP fields have been given values, now
-  // you can send a packet requesting a timestamp:
-  udp.beginPacket(address, 123); //NTP requests are to port 123
-  udp.write(packetBuffer, 48);
-  udp.endPacket();
+  _udp.beginPacket(address, 123);
+  _udp.write(packetBuffer, 48);
+  _udp.endPacket();
 }
 
 bool wifiConn (JsonObject & wifiset) {
@@ -440,29 +418,29 @@ bool wifiConn (JsonObject & wifiset) {
     strcpy(passc, pass.c_str());
     if (tmpdhcp == "static") WiFi.config(stringToIP(ip), stringToIP(gate), stringToIP(sub));
     WiFi.begin(ssidc, passc);
-    Serial.print("Connecting to ");
-    Serial.println(ssid);
+    Serial.print(F("Connecting to "));
+    Serial.print(ssid);
 
     delete[] passc;
     delete[] ssidc;
     // Wait for connection
     uint8_t i = 0;
 
-    while (WiFi.status() != WL_CONNECTED && i++ < 20) //wait 10 seconds
+    while (WiFi.status() != WL_CONNECTED && i++ < 20) { //wait 10 seconds
       delay(500);
+      Serial.print(F("."));
+    }
 
     if (i >= 21 && WiFi.status() != WL_CONNECTED) {
-      Serial.print(F("Unable to connect to "));
-      Serial.println(ssid);
+      Serial.println(F(" Fail"));
       if ((xxx + 1) == saved_ap) {
         Serial.println(F("No networks available or incorrect credentials"));
         return false;
       } else continue;
     }
 
-    Serial.print(F("Connected to "));
-    Serial.print(ssid);
-    Serial.print(F("\nIP obtain mode: "));
+    Serial.print(F(" Success\n"));
+    Serial.print(F("IP obtain mode: "));
     if (tmpdhcp == "dhcp") Serial.println(F("DHCP"));
     else Serial.println(F("Static"));
     Serial.print(F("IP address: "));
@@ -574,10 +552,10 @@ void deleteRecursive(String path) {
 }
 
 void handleDelete() {
-  if (server.args() == 0) return returnFail("BAD ARGS");
+  if (server.args() == 0) return returnFail(F("BAD ARGS"));
   String path = server.arg(0);
   if (path == "/" || !SD.exists((char *)path.c_str())) {
-    returnFail("BAD PATH");
+    returnFail(F("BAD PATH"));
     return;
   }
   deleteRecursive(path);
@@ -585,10 +563,10 @@ void handleDelete() {
 }
 
 void handleCreate() {
-  if (server.args() == 0) return returnFail("BAD ARGS");
+  if (server.args() == 0) return returnFail(F("BAD ARGS"));
   String path = server.arg(0);
   if (path == "/" || SD.exists((char *)path.c_str())) {
-    returnFail("BAD PATH");
+    returnFail(F("BAD PATH"));
     return;
   }
 
@@ -605,9 +583,10 @@ void handleCreate() {
 }
 
 void printDirectory() {
-  if (!server.hasArg("dir")) return returnFail("BAD ARGS");
+  if (!server.hasArg("dir")) return returnFail(F("BAD ARGS"));
   String path = server.arg("dir");
-  if (path != "/" && !SD.exists((char *)path.c_str())) return returnFail("BAD PATH");
+  if (path != "/" && !SD.exists((char *)path.c_str()))
+    return returnFail(F("BAD PATH"));
   File dir = SD.open((char *)path.c_str());
   path = String();
   if (!dir.isDirectory()) {
@@ -619,7 +598,7 @@ void printDirectory() {
   server.send(200, "text/json", "");
   WiFiClient client = server.client();
 
-  server.sendContent("[");
+  server.sendContent(F("["));
   for (int cnt = 0; true; ++cnt) {
     File entry = dir.openNextFile();
     if (!entry)
@@ -629,16 +608,16 @@ void printDirectory() {
     if (cnt > 0)
       output = ',';
 
-    output += "{\"type\":\"";
+    output += F("{\"type\":\"");
     output += (entry.isDirectory()) ? "dir" : "file";
-    output += "\",\"name\":\"";
+    output += F("\",\"name\":\"");
     output += entry.name();
-    output += "\"";
-    output += "}";
+    output += F("\"");
+    output += F("}");
     server.sendContent(output);
     entry.close();
   }
-  server.sendContent("]");
+  server.sendContent(F("]"));
   dir.close();
 }
 
@@ -665,4 +644,3 @@ double getTemp(JsonObject & addrset, int row) {
     tempaddr[b] = addrset["sensor"][row][b + 1];
   return sensors.getTempC(tempaddr);
 }
-

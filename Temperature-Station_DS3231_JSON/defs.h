@@ -1,6 +1,6 @@
 #define SD_D D0 //GPIO16
-#define SDA D1  //GPIO5
-#define SCL D2  //GPIO4
+#define SDA D1 //GPIO5
+#define SCL D2 //GPIO4
 #define OW_PORT D3 //GPIO0
 #define SD_CS D4 //GPIO2
 #define countof(a) (sizeof(a) / sizeof(a[0]))
@@ -9,19 +9,16 @@
 #define MAX_SENSORS 16
 
 static bool httpserver = false;
-bool use_ntp = false;
-
-String json = "";
+bool use_ntp = true;
 int zone = 0;
 bool letni = true;
+String json = "";
+
 byte packetBuffer[48];
 
-String workfile = "TEMP.CSV"; //If no time is available we will use this file
-//I should make function which will automatically clean up records and move to correct files
-
+String workfile = "TEMP.CSV";
 int valid_sensors = 0;
 int saved_ap = 0;
-double _temps_[MAX_SENSORS];
 
 bool isMember(byte _1[], JsonObject& compObj, int _size) {
   for (int a = 0; a < _size; a++) {
@@ -40,6 +37,28 @@ String addrToString(uint8_t _addr[8]) {
   for (int a = 0; a < 8; a++)
     out += String(_addr[a]);
   return out;
+}
+
+void saveJson(JsonObject &toSave) {
+  if (SD.exists(SETTINGS_FILE))
+    SD.remove(SETTINGS_FILE);
+  File root = SD.open(SETTINGS_FILE, FILE_WRITE);
+  toSave.prettyPrintTo(root);
+  root.flush();
+  root.close();
+}
+
+String printDateTime(const RtcDateTime & dt) {
+  char datestring[20];
+  snprintf_P(datestring,
+             countof(datestring),
+             PSTR("%02u/%02u/%04u;%02u:%02u"),
+             dt.Day(),
+             dt.Month(),
+             dt.Year(),
+             dt.Hour(),
+             dt.Minute());
+  return datestring;
 }
 
 IPAddress stringToIP(String input) {
@@ -61,17 +80,4 @@ String IPtoString(IPAddress address) {
   String out = String(address[0]) + "." + String(address[1]) + ".";
   out = out + String(address[2]) + "." + String(address[3]);
   return out;
-}
-
-String printDateTime(const RtcDateTime & dt) {
-  char datestring[20];
-  snprintf_P(datestring,
-             countof(datestring),
-             PSTR("%02u/%02u/%04u;%02u:%02u"),
-             dt.Day(),
-             dt.Month(),
-             dt.Year(),
-             dt.Hour(),
-             dt.Minute() );
-  return datestring;
 }

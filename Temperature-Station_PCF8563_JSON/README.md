@@ -33,17 +33,16 @@ Features:
 		"use_ntp": self explainatory, probably going to mature this later  
 		"timezone": also self explainatory. 
 	
-# Warning on first run!   
+# Warning on first run! (workaround)   
 If You need to get sensor addresses and You are generating settings for the first time:  
 		1. Asked for name and address enter whatever you want    
-		(remember address consists of 8 bytes; 8 integers smaller than 255 separated by commas)  
-		2. Enter \quit to finish adding sensors.  
+		(write 000,000,000,000,000,000,000,000)
+		2. Enter \quit.
 		3. Configure network
 			3.1. IP address will be saved to settings file  
 		4. Connect to Your station [ip]/sensors   
-		5. Launch SettingsGenerator  
-		6. Identify Your sensors by touching them or removing one of them (temperature change will be shown when page is refreshed!)  
-		7. Give that sensor a name (maybe physically label sensor with that name and address) and copy-paste address from site to SettingsGenerator  
+		5. Remove 000,000(and so on) sensor and name sensors shown in table.  
+		Checkbox checked - this sensor's name will be removed.  
 
 SettingsGenerator has got validation mechanisms. They're working for me.  
 When invalid address (sensor or IP) is entered it will ask you to write it again. Simple.  

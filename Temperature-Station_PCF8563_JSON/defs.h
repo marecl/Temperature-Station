@@ -1,6 +1,6 @@
 #define SD_D D0 //GPIO16
-#define SDA D1  //GPIO5
-#define SCL D2  //GPIO4
+#define SDA D1 //GPIO5
+#define SCL D2 //GPIO4
 #define OW_PORT D3 //GPIO0
 #define SD_CS D4 //GPIO2
 #define countof(a) (sizeof(a) / sizeof(a[0]))
@@ -16,16 +16,35 @@ String json = "";
 
 byte packetBuffer[48];
 
-String workfile = "TEMP.CSV"; //If no time is available we will use this file
-//I should make function which will automatically clean up records and move to correct files
-
+String workfile = "TEMP.CSV";
 int valid_sensors = 0;
 int saved_ap = 0;
 
-void updateSettings(JsonObject& file){
-  if(SD.exists(SETTINGS_FILE)) SD.remove(SETTINGS_FILE);
-  File root = SD.open(SETTINGS_FILE , FILE_WRITE);
-  file.printTo(root);
+bool isMember(byte _1[], JsonObject& compObj, int _size) {
+  for (int a = 0; a < _size; a++) {
+    for (int b = 0; b < 8; b++) {
+      byte _2 = compObj["sensor"][a][b + 1];
+      if (_1[b] != _2)
+        break;
+      else if (b == 7) return true;
+    }
+  }
+  return false;
+}
+
+String addrToString(uint8_t _addr[8]) {
+  String out = "";
+  for (int a = 0; a < 8; a++)
+    out += String(_addr[a]);
+  return out;
+}
+
+void saveJson(JsonObject &toSave) {
+  if (SD.exists(SETTINGS_FILE))
+    SD.remove(SETTINGS_FILE);
+  File root = SD.open(SETTINGS_FILE, FILE_WRITE);
+  toSave.prettyPrintTo(root);
+  root.flush();
   root.close();
 }
 
@@ -38,7 +57,7 @@ String printDateTime(Czas& timeobj) {
              timeobj.month,
              timeobj.year,
              timeobj.hour,
-             timeobj.minute );
+             timeobj.minute);
   return datestring;
 }
 
@@ -62,4 +81,3 @@ String IPtoString(IPAddress address) {
   out = out + String(address[2]) + "." + String(address[3]);
   return out;
 }
-

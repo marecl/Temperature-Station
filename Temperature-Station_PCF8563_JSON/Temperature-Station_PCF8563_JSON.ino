@@ -11,29 +11,26 @@
 /*
   Web updater!
 
-  Read JSON directly from SDcard
-
   Encrypt password in file
 
   Add option to change/update date&time via http
 */
-IPAddress timeServerIP;
-WiFiUDP udp;
-
 ESP8266WebServer server(80);
 
 OneWire oneWire(OW_PORT);
 DallasTemperature sensors(&oneWire);
 
-DynamicJsonBuffer jsonBuffer(750);
+DynamicJsonBuffer jsonBuffer(1000);
 
 Czas zegar(SDA, SCL); //SDA, SCL
 
 void setup() {
   Serial.begin(115200);
   Serial.setDebugOutput(false);
-  Serial.print("\n");
+  pinMode(D0, INPUT);
+  Serial.print(F("\n"));
   sensors.begin();
+  sensors.requestTemperatures();
   if (!digitalRead(SD_D)) {
     if (SD.begin(SD_CS)) {
       Serial.println(F("SD Card initialized"));
@@ -87,37 +84,22 @@ void setup() {
     server.on("/", HTTP_POST, []() {
       returnOK();
     }, handleFileUpload);
-    server.on("/settings.txt", HTTP_GET, returnForbidden);
+    //server.on("/settings.txt", HTTP_GET, returnForbidden);
     server.onNotFound(handleNotFound);
     server.begin();
     Serial.println(F("HTTP server started"));
 
     use_ntp = settings["use_ntp"];
     if (use_ntp) {
-      delay(2500);
-      udp.begin(2390);
-      const char* ntpServerName = settings["ntp_server"];
-      WiFi.hostByName(ntpServerName, timeServerIP);
-      sendNTPpacket(timeServerIP);
-      delay(1000);
-      int cb = udp.parsePacket();
-      if (!cb)
-        Serial.println(F("Received invalid NTP data"));
-      else {
-        udp.read(packetBuffer, 48);
-        unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
-        unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
-        unsigned long secsSince1900 = highWord << 16 | lowWord;
-        unsigned long epoch = secsSince1900 - 2208988800UL;
-        zegar.timezone = settings["timezone"];
+      unsigned long newTime = updateNTP(settings);
+
+      zegar.readRTC();
+      Serial.println(printDateTime(zegar));
+      if (!zegar.CompareTimeEpoch(newTime, 5)) {
+        Serial.println(F("Adjusting time..."));
+        zegar.setRTC(newTime);
         zegar.readRTC();
         Serial.println(printDateTime(zegar));
-        if (!zegar.CompareTimeEpoch(epoch, 5)) {
-          Serial.println("Adjusting time...");
-          zegar.setRTC(epoch);
-          zegar.readRTC();
-          Serial.println(printDateTime(zegar));
-        }
       }
     }
   }
@@ -129,9 +111,9 @@ void setup() {
     String xdtmp = settings["sensor"][a][0];
     Serial.print(xdtmp);
     if (getTemp(settings, a) != -127)
-      Serial.println(" Connected");
+      Serial.println(F(" Connected"));
     else
-      Serial.println(" N/C");
+      Serial.println(F(" N/C"));
   }
   Serial.println();
   createfile(settings);
@@ -154,9 +136,7 @@ void loop() {
   while (1) {
     while (((zegar.minute % 5) != 0) && !digitalRead(SD_D)) {
       zegar.readRTC();
-      if (httpserver)
-        server.handleClient();
-      else delay(10);
+      httpserver ? server.handleClient() : delay(10);
     }
 
     if (!digitalRead(SD_D)) {
@@ -170,14 +150,14 @@ void loop() {
         root.flush();
         for (int c = 0; c < valid_sensors; c++) {
           root.print(getTemp(settings, c), 1);
-          if (valid_sensors - c > 1) root.print(";");
-          else root.print("\r\n");
+          if (valid_sensors - c > 1) root.print(F(";"));
+          else root.print(F("\r\n"));
           root.flush();
         }
         root.close();
       }
     } else {
-      Serial.println("NO SDCARD!");
+      Serial.println(F("NO SDCARD!"));
       while (digitalRead(SD_D)) delay(1000);
       Serial.println(F("SD Card found. Reboot..."));
       ESP.restart();
@@ -185,42 +165,142 @@ void loop() {
 
     while (((zegar.minute % 5) == 0) && !digitalRead(SD_D)) {
       zegar.readRTC();
-      if (httpserver)
-        server.handleClient();
-      else delay(10);
+      httpserver ? server.handleClient() : delay(10);
     }
   }
 }
 
 void sensorSettings() {
   sensors.requestTemperatures();
+  DynamicJsonBuffer sensBuff(1000);
+
+  File root = SD.open(SETTINGS_FILE , FILE_READ);
+  int tmp = root.read();
+  json = "";
+  while (tmp != -1) {
+    if (tmp != 32 && tmp != 9)
+      json += (char)tmp;
+    tmp = root.read();
+  }
+  root.close();
+  JsonObject& sensSet = sensBuff.parseObject(json);
+
+  if (!sensSet.success())
+    return;
+
+  String changeName;
+  int changePos;
+
+  if (server.args() != 0) {
+    for (int x = server.args() - 1; x >= 0; x--) {
+      if (server.argName(x) == "Remove") {
+        JsonArray& setMain = sensSet["sensor"];
+        setMain.remove((atoi((server.arg(x)).c_str())));
+        valid_sensors--;
+        sensSet["valid_sensors"] = valid_sensors;
+        saveJson(sensSet);
+        if ((server.arg(x) == server.argName(x - 1)) && x > 0)
+          x -= 1;
+      } else {
+        changePos = atoi((server.argName(x)).c_str());
+        changeName = server.arg(x);
+        sensSet["sensor"][changePos][0] = changeName;
+        saveJson(sensSet);
+      }
+    }
+    server.sendContent(F("HTTP/1.1 307 Temporary Redirect\r\n"));
+    server.sendContent(F("Location: /sensors\r\n"));
+    server.sendContent(F("Connection: Close\r\n\r\n"));
+    return;
+  }
+
   byte i;
   byte addr[8];
-  double te;
+  String temp;
+  int sensorRow;
+
   server.sendContent(F("<!DOCTYPE html><html><head><title>Sensors</title>"));
-  server.sendContent(F("<meta http-equiv=\"refresh\" content=\"15\">"));
   server.sendContent(F("<style>table,th,td{border:1px solid black;"));
   server.sendContent(F("text-align:center}</style></head>"));
   server.sendContent(F("<body><table><caption><b>Available sensors</b></caption>"));
-  server.sendContent(F("<tr><th>Address (DEC)</th><th>Temperature</th>"));
-  while (oneWire.search(addr)) {
+  server.sendContent(F("<tr><th>Address (DEC)</th><th>Temperature</th><th>Name</th>"));
+  server.sendContent(F("<form>"));
+
+
+  for (int a = 0; a < valid_sensors; a++) {
     server.sendContent(F("<tr><td>"));
+    for (int b = 0; b < 8; b++)
+      addr[b] = sensSet["sensor"][a][b + 1];
+
     for (i = 0; i < 8; i++) {
-      if (addr[i] < 100) server.sendContent("0");
-      if (addr[i] < 10) server.sendContent("0");
+      if (addr[i] < 100) server.sendContent(F("0"));
+      if (addr[i] < 10) server.sendContent(F("0"));
       server.sendContent((String)addr[i]);
       if (i < 7)
-        server.sendContent(",");
+        server.sendContent(F(","));
+    }
+    server.sendContent(F("</td><td>"));
+    if (getTemp(sensSet, a) != -127)
+      server.sendContent((String)sensors.getTempC(addr) + (char)176 + "C");
+    else
+      server.sendContent(F("N/C"));
+
+    server.sendContent(F("</td><td>"));
+    String tempName = sensSet["sensor"][a][0];
+
+    server.sendContent(F("<input type = \"text\" name = "));
+    server.sendContent(String(a)); //Position in file
+    server.sendContent(F(" value = "));
+    server.sendContent(tempName);
+    server.sendContent(F("><input type=\"checkbox\" name=\"Remove\" value= "));
+    server.sendContent(String(a));
+    server.sendContent(F("></td></tr>"));
+  }
+
+  while (oneWire.search(addr)) {
+    if (isMember(addr, sensSet, valid_sensors))
+      continue;
+
+    server.sendContent(F("<tr><td>"));
+    for (i = 0; i < 8; i++) {
+      if (addr[i] < 100) server.sendContent(F("0"));
+      if (addr[i] < 10) server.sendContent(F("0"));
+      server.sendContent((String)addr[i]);
+      if (i < 7)
+        server.sendContent(F(","));
     }
     if (OneWire::crc8(addr, 7) != addr[7]) {
       server.sendContent(F("Invalid CRC!"));
       return;
     }
+
     server.sendContent(F("</td><td>"));
-    te = sensors.getTempC(addr);
-    server.sendContent((String)te);
-    server.sendContent(F("</td></tr>"));
+
+    valid_sensors += 1;
+    sensSet["valid_sensors"] = valid_sensors;
+    String tempname = addrToString(addr);
+    JsonArray& setMain = sensSet["sensor"];
+    JsonArray& newSet = setMain.createNestedArray();
+    newSet.add(tempname);
+    for (int x = 0; x < 8; x++)
+      newSet.add(addr[x]);
+    sensorRow = valid_sensors - 1;
+    saveJson(sensSet);
+
+    server.sendContent((String)sensors.getTempC(addr) + (char)176 + "C");
+    server.sendContent(F("</td><td>"));
+    server.sendContent(F("<input type = \"text\" name = "));
+    server.sendContent(String(sensorRow)); //Position in file
+    server.sendContent(F(" value = "));
+    server.sendContent(F("UNKNOWN_NEW")); //Sensor name
+    server.sendContent(F("><input type=\"checkbox\" name=\"Remove\" value= "));
+    server.sendContent(String(sensorRow)); //Position in file
+    server.sendContent(F("></td></tr>"));
   }
+  server.sendContent(F("<button type=\"submit\" value=\"Save\">Save Changes</button>"));
+  server.sendContent(F("<button type=\"reset\" value=\"Reset\">Reset</button>"));
+  server.sendContent(F("</form>"));
+
   server.sendContent(F("</table></body></html>"));
   return;
 }
@@ -241,13 +321,13 @@ void createfile(JsonObject & nameobj) {
   if (!SD.exists(path2)) {
     File dest = SD.open(path2, FILE_WRITE);
 
-    dest.print("Date;Time;");
+    dest.print(F("Date;Time;"));
     dest.flush();
     for (int c = 0; c < valid_sensors; c++) {
       String tempname = nameobj["sensor"][c][0];
       dest.print(tempname);
-      if (valid_sensors - c > 1) dest.print(";");
-      else dest.print("\r\n");
+      if (valid_sensors - c > 1) dest.print(F(";"));
+      else dest.print(F("\r\n"));
       dest.flush();
     }
     dest.close();
@@ -257,47 +337,55 @@ void createfile(JsonObject & nameobj) {
 }
 
 void updatetime() {
-  Serial.print(F("Aktualizacja czasu!\nCzas przed: "));
-  Serial.println(printDateTime(zegar));
-  sendNTPpacket(timeServerIP);
+  /*Serial.print(F("Aktualizacja czasu!\nCzas przed: "));
+    Serial.println(printDateTime(zegar));
+
+    Serial.print(F("Czas po: "));
+    Serial.println(printDateTime(zegar));*/
+
+  server.sendContent(F("HTTP/1.1 307 Temporary Redirect\r\n"));
+  server.sendContent(F("Location: /\r\n"));
+  server.sendContent(F("Connection: Close\r\n\r\n"));
+}
+
+unsigned long updateNTP(JsonObject& timeSet) {
+  WiFiUDP udp;
+  IPAddress timeServerIP;
+  udp.begin(2390);
   delay(1000);
-  int cb = udp.parsePacket();
-  if (cb) {
+  const char* ntpServerName = timeSet["ntp_server"];
+  WiFi.hostByName(ntpServerName, timeServerIP);
+  sendNTPpacket(timeServerIP, udp);
+
+  delay(1000);
+  if (udp.parsePacket()) {
     udp.read(packetBuffer, 48);
     unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
     unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
     unsigned long secsSince1900 = highWord << 16 | lowWord;
-    const unsigned long seventyYears = 2208988800UL;
-    unsigned long epoch = secsSince1900 - seventyYears - 946684800;
-    epoch = zone * 3600; //strefa
-    if (letni)epoch += 3600; //czas letni
-    zegar.setRTC(epoch);
+    return (secsSince1900 - 2208988800UL + zone * 3600 + (int)letni * 3600);
   }
-  Serial.print(F("Czas po: "));
-  Serial.println(printDateTime(zegar));
+  else return false;
 }
 
-void sendNTPpacket(IPAddress & address) { //unsigned long
+void sendNTPpacket(IPAddress & address, WiFiUDP& _udp) {
   Serial.println(F("Sending NTP packet..."));
-  // set all bytes in the buffer to 0
-  memset(packetBuffer, 0, 48);
-  // Initialize values needed to form NTP request
-  // (see URL above for details on the packets)
-  packetBuffer[0] = 0b11100011;   // LI, Version, Mode
-  packetBuffer[1] = 0;     // Stratum, or type of clock
-  packetBuffer[2] = 6;     // Polling Interval
-  packetBuffer[3] = 0xEC;  // Peer Clock Precision
-  // 8 bytes of zero for Root Delay & Root Dispersion
-  packetBuffer[12]  = 49;
-  packetBuffer[13]  = 0x4E;
-  packetBuffer[14]  = 49;
-  packetBuffer[15]  = 52;
 
-  // all NTP fields have been given values, now
-  // you can send a packet requesting a timestamp:
-  udp.beginPacket(address, 123); //NTP requests are to port 123
-  udp.write(packetBuffer, 48);
-  udp.endPacket();
+  memset(packetBuffer, 0, 48);
+
+  packetBuffer[0] = 0b11100011; // LI, Version, Mode
+  packetBuffer[1] = 0; // Stratum, or type of clock
+  packetBuffer[2] = 6; // Polling Interval
+  packetBuffer[3] = 0xEC; // Peer Clock Precision
+  // 8 bytes of zero for Root Delay & Root Dispersion
+  packetBuffer[12] = 49;
+  packetBuffer[13] = 0x4E;
+  packetBuffer[14] = 49;
+  packetBuffer[15] = 52;
+
+  _udp.beginPacket(address, 123);
+  _udp.write(packetBuffer, 48);
+  _udp.endPacket();
 }
 
 bool wifiConn (JsonObject & wifiset) {
@@ -318,29 +406,29 @@ bool wifiConn (JsonObject & wifiset) {
     strcpy(passc, pass.c_str());
     if (tmpdhcp == "static") WiFi.config(stringToIP(ip), stringToIP(gate), stringToIP(sub));
     WiFi.begin(ssidc, passc);
-    Serial.print("Connecting to ");
-    Serial.println(ssid);
+    Serial.print(F("Connecting to "));
+    Serial.print(ssid);
 
     delete[] passc;
     delete[] ssidc;
     // Wait for connection
     uint8_t i = 0;
 
-    while (WiFi.status() != WL_CONNECTED && i++ < 20) //wait 10 seconds
+    while (WiFi.status() != WL_CONNECTED && i++ < 20) { //wait 10 seconds
       delay(500);
+      Serial.print(F("."));
+    }
 
     if (i >= 21 && WiFi.status() != WL_CONNECTED) {
-      Serial.print(F("Unable to connect to "));
-      Serial.println(ssid);
+      Serial.println(F(" Fail"));
       if ((xxx + 1) == saved_ap) {
         Serial.println(F("No networks available or incorrect credentials"));
         return false;
       } else continue;
     }
 
-    Serial.print(F("Connected to "));
-    Serial.print(ssid);
-    Serial.print(F("\nIP obtain mode: "));
+    Serial.print(F(" Success\n"));
+    Serial.print(F("IP obtain mode: "));
     if (tmpdhcp == "dhcp") Serial.println(F("DHCP"));
     else Serial.println(F("Static"));
     Serial.print(F("IP address: "));
@@ -363,11 +451,7 @@ void returnFail(String msg) {
 }
 
 void returnForbidden() {
-  String output = "<html>\r\n";
-  output += "<h1>403 FORBIDDEN</h1>\r\n";
-  output += "</html>";
-  server.send(403, "text/html", output);
-  Serial.println(F("Somebody tried to access password file!"));
+  server.send(403, "text/plain", "Access Denied\r\n");
 }
 
 bool loadFromSdCard(String path) {
@@ -412,15 +496,19 @@ void handleFileUpload() {
   if (server.uri() != "/") return;
   HTTPUpload& upload = server.upload();
   if (upload.status == UPLOAD_FILE_START) {
-    if (SD.exists((char *)upload.filename.c_str())) SD.remove((char *)upload.filename.c_str());
+    if (SD.exists((char *)upload.filename.c_str()))
+      SD.remove((char *)upload.filename.c_str());
     uploadFile = SD.open(upload.filename.c_str(), FILE_WRITE);
-    Serial.print(F("Upload: START, filename: ")); Serial.println(upload.filename);
+    Serial.print(F("Upload: START, filename: "));
+    Serial.println(upload.filename);
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     if (uploadFile) uploadFile.write(upload.buf, upload.currentSize);
-    Serial.print(F("Upload: WRITE, Bytes: ")); Serial.println(upload.currentSize);
+    Serial.print(F("Upload: WRITE, Bytes: "));
+    Serial.println(upload.currentSize);
   } else if (upload.status == UPLOAD_FILE_END) {
     if (uploadFile) uploadFile.close();
-    Serial.print(F("Upload: END, Size: ")); Serial.println(upload.totalSize);
+    Serial.print(F("Upload: END, Size: "));
+    Serial.println(upload.totalSize);
   }
 }
 
@@ -452,10 +540,10 @@ void deleteRecursive(String path) {
 }
 
 void handleDelete() {
-  if (server.args() == 0) return returnFail("BAD ARGS");
+  if (server.args() == 0) return returnFail(F("BAD ARGS"));
   String path = server.arg(0);
   if (path == "/" || !SD.exists((char *)path.c_str())) {
-    returnFail("BAD PATH");
+    returnFail(F("BAD PATH"));
     return;
   }
   deleteRecursive(path);
@@ -463,10 +551,10 @@ void handleDelete() {
 }
 
 void handleCreate() {
-  if (server.args() == 0) return returnFail("BAD ARGS");
+  if (server.args() == 0) return returnFail(F("BAD ARGS"));
   String path = server.arg(0);
   if (path == "/" || SD.exists((char *)path.c_str())) {
-    returnFail("BAD PATH");
+    returnFail(F("BAD PATH"));
     return;
   }
 
@@ -483,21 +571,22 @@ void handleCreate() {
 }
 
 void printDirectory() {
-  if (!server.hasArg("dir")) return returnFail("BAD ARGS");
+  if (!server.hasArg("dir")) return returnFail(F("BAD ARGS"));
   String path = server.arg("dir");
-  if (path != "/" && !SD.exists((char *)path.c_str())) return returnFail("BAD PATH");
+  if (path != "/" && !SD.exists((char *)path.c_str()))
+    return returnFail(F("BAD PATH"));
   File dir = SD.open((char *)path.c_str());
   path = String();
   if (!dir.isDirectory()) {
     dir.close();
-    return returnFail("NOT DIR");
+    return returnFail(F("NOT DIR"));
   }
   dir.rewindDirectory();
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "text/json", "");
   WiFiClient client = server.client();
 
-  server.sendContent("[");
+  server.sendContent(F("["));
   for (int cnt = 0; true; ++cnt) {
     File entry = dir.openNextFile();
     if (!entry)
@@ -507,16 +596,16 @@ void printDirectory() {
     if (cnt > 0)
       output = ',';
 
-    output += "{\"type\":\"";
+    output += F("{\"type\":\"");
     output += (entry.isDirectory()) ? "dir" : "file";
-    output += "\",\"name\":\"";
+    output += F("\",\"name\":\"");
     output += entry.name();
-    output += "\"";
-    output += "}";
+    output += F("\"");
+    output += F("}");
     server.sendContent(output);
     entry.close();
   }
-  server.sendContent("]");
+  server.sendContent(F("]"));
   dir.close();
 }
 
