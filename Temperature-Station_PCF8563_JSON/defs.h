@@ -20,6 +20,22 @@ String workfile = "TEMP.CSV";
 int valid_sensors = 0;
 int saved_ap = 0;
 
+void bootFailHandler(int _code) {
+  switch (_code) {
+    default: return; break;
+    case 1: Serial.println(F("No settings file!")); break;
+    case 2: Serial.println(F("SD Card detected but cannot be initialized!"));
+      break;
+    case 3: Serial.print(F("No card inserted\n")); break;
+    case 4: Serial.println(F("Invalid JSON file"));
+      Serial.println(F("Come back with valid one. Rebooting...")); break;
+    case 5: Serial.print(F("Could not connect to WiFi!\n"));
+      Serial.print(F("Log mode only\n")); break;
+  }
+  delay(1000);
+  ESP.restart();
+}
+
 bool isMember(byte _1[], JsonObject& compObj, int _size) {
   for (int a = 0; a < _size; a++) {
     for (int b = 0; b < 8; b++) {
@@ -53,11 +69,11 @@ String printDateTime(Czas& timeobj) {
   snprintf_P(datestring,
              countof(datestring),
              PSTR("%02u/%02u/%04u;%02u:%02u"),
-             timeobj.day,
-             timeobj.month,
-             timeobj.year,
-             timeobj.hour,
-             timeobj.minute);
+             timeobj.day(),
+             timeobj.month(),
+             timeobj.year(),
+             timeobj.hour(),
+             timeobj.minute());
   return datestring;
 }
 

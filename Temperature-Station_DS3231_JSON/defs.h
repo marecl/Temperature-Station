@@ -11,10 +11,8 @@
 static bool httpserver = false;
 bool use_ntp = true;
 int zone = 0;
-bool letni = true;
+bool letni = false;
 String json = "";
-
-byte packetBuffer[48];
 
 String workfile = "TEMP.CSV";
 int valid_sensors = 0;
@@ -81,3 +79,4 @@ String IPtoString(IPAddress address) {
   out = out + String(address[2]) + "." + String(address[3]);
   return out;
 }
+

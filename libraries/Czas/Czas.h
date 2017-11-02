@@ -27,13 +27,13 @@ class Czas { //PCF8563
   public:
     Czas(byte sda_pin, byte scl_pin);
     ~Czas();
-    int second;
-    int minute;
-    int hour;
-    int day;
-    int month;
-    int year;
-    int dow; //Day of week
+    int second();
+    int minute();
+    int hour();
+    int day();
+    int month();
+    int year();
+    int dow(); //Day of week
     bool dls; //Daylight saving
     signed short int timezone;
     void readRTC();
@@ -44,6 +44,13 @@ class Czas { //PCF8563
   private:
     byte bcdToDec(byte value);
     byte decToBcd(byte value);
+	int _second;
+    int _minute;
+    int _hour;
+    int _day;
+    int _month;
+    int _year;
+    int _dow; //Day of week
 };
 
 #endif

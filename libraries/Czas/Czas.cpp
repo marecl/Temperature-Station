@@ -27,14 +27,14 @@ void Czas::readRTC() {
   Wire.write(0x02);
   Wire.endTransmission();
   Wire.requestFrom(RTC_ADDR, 7);
-  this->second = this->bcdToDec(Wire.read() & B01111111); // sek
-  this->minute = this->bcdToDec(Wire.read() & B01111111); // min
-  this->hour = this->bcdToDec(Wire.read() & B00111111); //godz
-  this->day = this->bcdToDec(Wire.read() & B00111111); //dz msc
-  this->dow = this->bcdToDec(Wire.read() & B00000111); //dz tyg
-  this->month = this->bcdToDec(Wire.read() & B00011111); // msc
-  this->year = this->bcdToDec(Wire.read()); //rok
-  this->year += 2000;
+  this->_second = this->bcdToDec(Wire.read() & B01111111); // sek
+  this->_minute = this->bcdToDec(Wire.read() & B01111111); // min
+  this->_hour = this->bcdToDec(Wire.read() & B00111111); //godz
+  this->_day = this->bcdToDec(Wire.read() & B00111111); //dz msc
+  this->_dow = this->bcdToDec(Wire.read() & B00000111); //dz tyg
+  this->_month = this->bcdToDec(Wire.read() & B00011111); // msc
+  this->_year = this->bcdToDec(Wire.read()); //rok
+  this->_year += 2000;
 }
 
 void Czas::setRTC(uint32_t t) {
@@ -124,12 +124,31 @@ bool Czas::CompareTimeEpoch(uint32_t t, int tolerance) { //tolerance in seconds,
   }
   d++;
   
-  if (r != (this-> year - 2000)) return false;
-  if (m != this->month) return false;
-  if (d != this->day) return false;
-  if (hh != this->hour) return false;
-  if (mm != this->minute) return false;
-  if (ss < (this->second - tolerance)) return false;
-  if (ss > (this->second + tolerance)) return false;
+  if (r != (this->_year - 2000)) return false;
+  if (m != this->_month) return false;
+  if (d != this->_day) return false;
+  if (hh != this->_hour) return false;
+  if (mm != this->_minute) return false;
+  if (ss < (this->_second - tolerance)) return false;
+  if (ss > (this->_second + tolerance)) return false;
   return true;
+}
+
+int Czas::second(){
+	return this->_second;
+}
+int Czas::minute(){
+	return this->_minute;
+}
+int Czas::hour(){
+	return this->_hour;
+}
+int Czas::day(){
+	return this->_day;
+}
+int Czas::month(){
+	return this->_month;
+}
+int Czas::year(){
+	return this->_year;
 }

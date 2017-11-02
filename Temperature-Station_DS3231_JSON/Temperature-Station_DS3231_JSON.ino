@@ -1,9 +1,10 @@
 #include <ArduinoJson.h>
 #include <DallasTemperature.h>
-#include <RtcDS3231.h>
+#include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
 #include <OneWire.h>
+#include <RtcDS3231.h>
 #include <SD.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -26,6 +27,7 @@
   Add option to change/update date&time via http
 */
 ESP8266WebServer server(80);
+ESP8266HTTPUpdateServer httpUpdater;
 
 OneWire oneWire(OW_PORT);
 DallasTemperature sensors(&oneWire);
@@ -34,6 +36,9 @@ DynamicJsonBuffer jsonBuffer(1000);
 
 RtcDS3231<TwoWire> zegar(Wire);
 RtcDateTime teraz;
+
+WiFiUDP udp;
+IPAddress timeServerIP;
 void setup() {
   Serial.begin(115200);
   Serial.setDebugOutput(false);
@@ -80,9 +85,8 @@ void setup() {
     ESP.restart();
   }
 
-  if (wifiConn(settings)) {
+  if (wifiConn(settings))
     httpserver = true;
-  }
   else {
     Serial.print(F("Could not connect to WiFi!\n"));
     Serial.print(F("Log mode only\n"));
@@ -98,10 +102,12 @@ void setup() {
     server.on("/", HTTP_POST, []() {
       returnOK();
     }, handleFileUpload);
-    //server.on("/settings.txt", returnForbidden);
+    server.on("/settings.txt", returnForbidden);
     server.onNotFound(handleNotFound);
+    httpUpdater.setup(&server);
     server.begin();
     Serial.println(F("HTTP server started"));
+    zone = settings["timezone"];
 
     use_ntp = settings["use_ntp"];
     if (use_ntp) {
@@ -110,13 +116,46 @@ void setup() {
       teraz = zegar.GetDateTime();
       if (RtcDateTime(newTime) != teraz) {
         Serial.println(F("Adjusting time..."));
-        Serial.println("Before: " + (String)teraz);
+        Serial.println("Before: " + printDateTime(teraz));
+        Serial.println("Current: " + printDateTime(RtcDateTime(newTime)));
         zegar.SetDateTime(newTime);
         teraz = zegar.GetDateTime();
-        Serial.println("After: " + (String)teraz);
+        Serial.print("After: ");
       }
     }
   }
+  Serial.println(printDateTime(teraz));
+
+  /*if (use_ntp) {
+    delay(2500);
+    udp.begin(2390);
+    const char* ntpServerName = settings["ntp_server"];
+    WiFi.hostByName(ntpServerName, timeServerIP);
+    sendNTPpacket(timeServerIP);
+    delay(1000);
+    int cb = udp.parsePacket();
+    if (!cb)
+      Serial.println(F("Received invalid NTP data"));
+    else {
+      udp.read(packetBuffer, 48);
+      unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
+      unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
+      unsigned long secsSince1900 = highWord << 16 | lowWord;
+      unsigned long epoch = secsSince1900 - 2208988800UL - 946684800;
+      zone = settings["timezone"];
+      epoch += zone * 3600; //strefa
+      if (letni) epoch += 3600; //czas letni
+      teraz = zegar.GetDateTime();
+      if (RtcDateTime(epoch) != teraz) {
+        Serial.println(F("Adjusting time..."));
+        Serial.println("Before: " + (String)teraz);
+        zegar.SetDateTime(epoch);
+        teraz = zegar.GetDateTime();
+        Serial.println("After:  " + (String)teraz);
+      }
+    }
+    }
+    }*/
 
   valid_sensors = settings["valid_sensors"];
   Serial.println(F("\nSensors:"));
@@ -353,6 +392,8 @@ void updatetime() {
   /*Serial.print(F("Aktualizacja czasu!\nCzas przed: "));
     Serial.println(printDateTime(zegar));
 
+
+
     Serial.print(F("Czas po: "));
     Serial.println(printDateTime(zegar));*/
 
@@ -362,45 +403,47 @@ void updatetime() {
 }
 
 unsigned long updateNTP(JsonObject& timeSet) {
-  WiFiUDP udp;
-  IPAddress timeServerIP;
+  unsigned long newTime = 0;
+  delay(2500);
   udp.begin(2390);
   const char* ntpServerName = timeSet["ntp_server"];
+  Serial.println(ntpServerName);
   WiFi.hostByName(ntpServerName, timeServerIP);
-  sendNTPpacket(timeServerIP, udp);
 
-  delay(1000);
-  if (udp.parsePacket()) {
-    udp.read(packetBuffer, 48);
-    unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
-    unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
-    unsigned long secsSince1900 = highWord << 16 | lowWord;
-    return (secsSince1900 - 2208988800UL + zone * 3600 + (int)letni * 3600);
-  }
-  else return false;
-}
-
-void sendNTPpacket(IPAddress & address, WiFiUDP& _udp) {
   Serial.println(F("Sending NTP packet..."));
 
+  byte packetBuffer[48];
   memset(packetBuffer, 0, 48);
-
-  packetBuffer[0] = 0b11100011; // LI, Version, Mode
-  packetBuffer[1] = 0; // Stratum, or type of clock
-  packetBuffer[2] = 6; // Polling Interval
-  packetBuffer[3] = 0xEC; // Peer Clock Precision
-  // 8 bytes of zero for Root Delay & Root Dispersion
+  packetBuffer[0] = 0b11100011;
+  packetBuffer[1] = 0;
+  packetBuffer[2] = 6;
+  packetBuffer[3] = 0xEC;
   packetBuffer[12] = 49;
   packetBuffer[13] = 0x4E;
   packetBuffer[14] = 49;
   packetBuffer[15] = 52;
+  udp.beginPacket(timeServerIP, 123);
+  udp.write(packetBuffer, 48);
+  udp.endPacket();
 
-  _udp.beginPacket(address, 123);
-  _udp.write(packetBuffer, 48);
-  _udp.endPacket();
+  delay(1000);
+  int cb = udp.parsePacket();
+  if (cb) {
+    Serial.println("Valid NTP data");
+    udp.read(packetBuffer, 48);
+    unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
+    unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
+    unsigned long secsSince1900 = highWord << 16 | lowWord;
+    newTime = secsSince1900 + (int)zone * 3600;
+    if (letni) newTime += 3600;
+    newTime -= 2208988800UL;
+    newTime -= 946684800;
+    return newTime;
+  } else Serial.println("Invalid NTP data");
+  return 0;
 }
 
-bool wifiConn (JsonObject & wifiset) {
+bool wifiConn(JsonObject & wifiset) {
   String tmpdhcp = wifiset["ip"]["mode"];
   String ip = wifiset["ip"]["ip"];
   String gate = wifiset["ip"]["gateway"];
@@ -644,3 +687,4 @@ double getTemp(JsonObject & addrset, int row) {
     tempaddr[b] = addrset["sensor"][row][b + 1];
   return sensors.getTempC(tempaddr);
 }
+

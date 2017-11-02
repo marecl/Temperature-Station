@@ -29,7 +29,6 @@ LIBS:opto
 LIBS:atmel
 LIBS:contrib
 LIBS:valves
-LIBS:ESP8266
 LIBS:74xgxx
 LIBS:ac-dc
 LIBS:actel
@@ -47,7 +46,6 @@ LIBS:elec-unifil
 LIBS:ESD_Protection
 LIBS:ftdi
 LIBS:gennum
-LIBS:graphic
 LIBS:graphic_symbols
 LIBS:hc11
 LIBS:infineon
@@ -56,7 +54,6 @@ LIBS:ir
 LIBS:Lattice
 LIBS:leds
 LIBS:LEM
-LIBS:logo
 LIBS:maxim
 LIBS:mechanical
 LIBS:microchip_dspic33dsc
@@ -629,7 +626,7 @@ Connection ~ 4650 4150
 Text GLabel 4750 1750 0    60   Input ~ 0
 RESET
 $Comp
-L SW_DIP_x01 SW1
+L SW_DIP_x01-RESCUE-Mainboard2.0_LM1117 SW1
 U 1 1 5962EC4D
 P 3550 4600
 F 0 "SW1" H 3550 4750 50  0000 C CNN
@@ -672,7 +669,7 @@ GPIO0
 Wire Wire Line
 	8650 3150 8650 3800
 $Comp
-L SW_DIP_x01 SW2
+L SW_DIP_x01-RESCUE-Mainboard2.0_LM1117 SW2
 U 1 1 596B81BC
 P 2800 4600
 F 0 "SW2" H 2800 4750 50  0000 C CNN

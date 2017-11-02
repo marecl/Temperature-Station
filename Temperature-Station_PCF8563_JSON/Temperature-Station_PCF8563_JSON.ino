@@ -1,6 +1,7 @@
 #include <ArduinoJson.h>
 #include <Czas.h> //PCF8563 library
 #include <DallasTemperature.h>
+#include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
 #include <OneWire.h>
@@ -9,13 +10,12 @@
 #include <WiFiUdp.h>
 #include "defs.h"
 /*
-  Web updater!
-
   Encrypt password in file
 
   Add option to change/update date&time via http
 */
 ESP8266WebServer server(80);
+ESP8266HTTPUpdateServer httpUpdater;
 
 OneWire oneWire(OW_PORT);
 DallasTemperature sensors(&oneWire);
@@ -34,24 +34,14 @@ void setup() {
   if (!digitalRead(SD_D)) {
     if (SD.begin(SD_CS)) {
       Serial.println(F("SD Card initialized"));
-      if (!SD.exists(SETTINGS_FILE)) {
-        Serial.println(F("No settings file!"));
-        delay(1000);
-        ESP.restart();
-      }
-    } else {
-      Serial.println(F("SD Card detected but cannot be initialized!"));
-      delay(1000);
-      ESP.restart();
-    }
-  } else {
-    Serial.print(F("No card inserted\n"));
-    delay(1000);
-    ESP.restart();
-  }
+      if (!SD.exists(SETTINGS_FILE))
+        bootFailHandler(1);
+    } else bootFailHandler(2);
+  } else bootFailHandler(3);
 
   File root = SD.open(SETTINGS_FILE , FILE_READ);
   int tmp = root.read();
+  json = "";
   while (tmp != -1) {
     if (tmp != 32 && tmp != 9)
       json += (char)tmp;
@@ -60,20 +50,12 @@ void setup() {
   root.close();
 
   JsonObject& settings = jsonBuffer.parseObject(json);
-  if (!settings.success()) {
-    Serial.println(F("Invalid JSON file"));
-    Serial.println(F("Come back with valid one. Rebooting..."));
-    delay(1000);
-    ESP.restart();
-  }
+  if (!settings.success())
+    bootFailHandler(4);
 
   if (wifiConn(settings))
     httpserver = true;
-  else {
-    Serial.print(F("Could not connect to WiFi!\n"));
-    Serial.print(F("Log mode only\n"));
-    httpserver = false;
-  }
+  else bootFailHandler(5);
 
   if (httpserver) {
     server.on("/sensors", HTTP_GET, sensorSettings);
@@ -84,8 +66,9 @@ void setup() {
     server.on("/", HTTP_POST, []() {
       returnOK();
     }, handleFileUpload);
-    //server.on("/settings.txt", HTTP_GET, returnForbidden);
+    //server.on("/settings.txt", returnForbidden);
     server.onNotFound(handleNotFound);
+    httpUpdater.setup(&server);
     server.begin();
     Serial.println(F("HTTP server started"));
 
@@ -122,7 +105,7 @@ void setup() {
 void loop() {
   File setfile = SD.open(SETTINGS_FILE , FILE_READ);
   int tmp = setfile.read();
-  String json = "";
+  json = "";
   while (tmp != -1) {
     if (tmp != 32 && tmp != 9)
       json += (char)tmp;
@@ -134,7 +117,7 @@ void loop() {
   //Uhnfortunately I can't pass object from setup()
 
   while (1) {
-    while (((zegar.minute % 5) != 0) && !digitalRead(SD_D)) {
+    while (((zegar.minute() % 5) != 0) && !digitalRead(SD_D)) {
       zegar.readRTC();
       httpserver ? server.handleClient() : delay(10);
     }
@@ -143,8 +126,8 @@ void loop() {
       sensors.requestTemperatures();
       delay(150);
       zegar.readRTC();
-      if (!(zegar.day > 31 || zegar.month > 12 || zegar.minute > 59 || zegar.hour > 23)) {
-        if (zegar.hour == 0 && zegar.minute == 0) createfile(settings);
+      if (!(zegar.day() > 31 || zegar.month() > 12 || zegar.minute() > 59 || zegar.hour() > 23)) {
+        if (zegar.hour() == 0 && zegar.minute() == 0) createfile(settings);
         File root = SD.open(workfile, FILE_WRITE);
         root.print(printDateTime(zegar) + ";");
         root.flush();
@@ -163,7 +146,7 @@ void loop() {
       ESP.restart();
     }
 
-    while (((zegar.minute % 5) == 0) && !digitalRead(SD_D)) {
+    while (((zegar.minute() % 5) == 0) && !digitalRead(SD_D)) {
       zegar.readRTC();
       httpserver ? server.handleClient() : delay(10);
     }
@@ -208,6 +191,9 @@ void sensorSettings() {
         saveJson(sensSet);
       }
     }
+    //Write new sensor names to avoid mixing things up
+    writeFileHeader(sensSet);
+
     server.sendContent(F("HTTP/1.1 307 Temporary Redirect\r\n"));
     server.sendContent(F("Location: /sensors\r\n"));
     server.sendContent(F("Connection: Close\r\n\r\n"));
@@ -225,7 +211,6 @@ void sensorSettings() {
   server.sendContent(F("<body><table><caption><b>Available sensors</b></caption>"));
   server.sendContent(F("<tr><th>Address (DEC)</th><th>Temperature</th><th>Name</th>"));
   server.sendContent(F("<form>"));
-
 
   for (int a = 0; a < valid_sensors; a++) {
     server.sendContent(F("<tr><td>"));
@@ -273,7 +258,6 @@ void sensorSettings() {
       server.sendContent(F("Invalid CRC!"));
       return;
     }
-
     server.sendContent(F("</td><td>"));
 
     valid_sensors += 1;
@@ -299,39 +283,38 @@ void sensorSettings() {
   }
   server.sendContent(F("<button type=\"submit\" value=\"Save\">Save Changes</button>"));
   server.sendContent(F("<button type=\"reset\" value=\"Reset\">Reset</button>"));
-  server.sendContent(F("</form>"));
-
-  server.sendContent(F("</table></body></html>"));
+  server.sendContent(F("</form></table></body></html>"));
   return;
 }
 
+void writeFileHeader(JsonObject& nameFile) {
+  File dest = SD.open(workfile, FILE_WRITE);
+  dest.print(F("Date;Time;"));
+  dest.flush();
+  for (int c = 0; c < valid_sensors; c++) {
+    String tempname = nameFile["sensor"][c][0];
+    dest.print(tempname);
+    if (valid_sensors - c > 1) dest.print(F(";"));
+    else dest.print(F("\r\n"));
+    dest.flush();
+  }
+  dest.close();
+}
+
 void createfile(JsonObject & nameobj) {
-  String path = "archiwum/" + (String)zegar.year;
-  if (zegar.month < 10) path += "0" + (String)zegar.month;
-  else path += (String)zegar.month;
+  String path = "archiwum/" + (String)zegar.year();
+  if (zegar.month() < 10) path += "0";
+  path += (String)zegar.month();
   char* path2 = new char[path.length() + 1];
   strcpy(path2, path.c_str());
   SD.mkdir(path2);
 
   path += "/";
-  if (zegar.day < 10) path += "0" + (String)zegar.day + ".csv";
-  else path += (String)zegar.day + ".csv";
+  if (zegar.day() < 10) path += "0";
+  path += (String)zegar.day() + ".csv";
   path2 = new char[path.length() + 1];
   strcpy(path2, path.c_str());
-  if (!SD.exists(path2)) {
-    File dest = SD.open(path2, FILE_WRITE);
-
-    dest.print(F("Date;Time;"));
-    dest.flush();
-    for (int c = 0; c < valid_sensors; c++) {
-      String tempname = nameobj["sensor"][c][0];
-      dest.print(tempname);
-      if (valid_sensors - c > 1) dest.print(F(";"));
-      else dest.print(F("\r\n"));
-      dest.flush();
-    }
-    dest.close();
-  }
+  if (!SD.exists(path2)) writeFileHeader(nameobj);
   workfile = path;
   delete [] path2;
 }
@@ -372,7 +355,6 @@ void sendNTPpacket(IPAddress & address, WiFiUDP& _udp) {
   Serial.println(F("Sending NTP packet..."));
 
   memset(packetBuffer, 0, 48);
-
   packetBuffer[0] = 0b11100011; // LI, Version, Mode
   packetBuffer[1] = 0; // Stratum, or type of clock
   packetBuffer[2] = 6; // Polling Interval
@@ -404,7 +386,8 @@ bool wifiConn (JsonObject & wifiset) {
     strcpy(ssidc, ssid.c_str());
     char *passc = new char[pass.length() + 1];
     strcpy(passc, pass.c_str());
-    if (tmpdhcp == "static") WiFi.config(stringToIP(ip), stringToIP(gate), stringToIP(sub));
+    if (tmpdhcp == "static")
+      WiFi.config(stringToIP(ip), stringToIP(gate), stringToIP(sub));
     WiFi.begin(ssidc, passc);
     Serial.print(F("Connecting to "));
     Serial.print(ssid);
@@ -414,23 +397,27 @@ bool wifiConn (JsonObject & wifiset) {
     // Wait for connection
     uint8_t i = 0;
 
-    while (WiFi.status() != WL_CONNECTED && i++ < 20) { //wait 10 seconds
+    while (WiFi.status() != WL_CONNECTED && i++ < 20) { //wait 10 second()s
       delay(500);
       Serial.print(F("."));
     }
 
     if (i >= 21 && WiFi.status() != WL_CONNECTED) {
       Serial.println(F(" Fail"));
-      if ((xxx + 1) == saved_ap) {
-        Serial.println(F("No networks available or incorrect credentials"));
+      if ((xxx + 1) == saved_ap)
         return false;
-      } else continue;
+      else continue;
     }
 
     Serial.print(F(" Success\n"));
     Serial.print(F("IP obtain mode: "));
-    if (tmpdhcp == "dhcp") Serial.println(F("DHCP"));
-    else Serial.println(F("Static"));
+    if (tmpdhcp == "dhcp") {
+      Serial.println(F("DHCP"));
+      wifiset["ip"]["ip"] = IPtoString(WiFi.localIP());
+      wifiset["ip"]["gateway"] = IPtoString(WiFi.gatewayIP());
+      wifiset["ip"]["subnet"] = IPtoString(WiFi.subnetMask());
+      saveJson(wifiset);
+    } else Serial.println(F("Static"));
     Serial.print(F("IP address: "));
     Serial.println(WiFi.localIP());
     Serial.print(F("Gateway: "));
@@ -443,45 +430,50 @@ bool wifiConn (JsonObject & wifiset) {
 }
 
 void returnOK() {
-  server.send(200, "text/plain", "");
+  server.send(200, F("text/plain"), F(""));
 }
 
 void returnFail(String msg) {
-  server.send(500, "text/plain", msg + "\r\n");
+  server.send(500, F("text/plain"), msg + "\r\n");
 }
 
 void returnForbidden() {
-  server.send(403, "text/plain", "Access Denied\r\n");
+  server.send(403, F("text/plain"), F("Access Denied\r\n"));
 }
 
 bool loadFromSdCard(String path) {
+  while (!server.authenticate("admin", "admin")) {
+    server.sendHeader(F("WWW-Authenticate"), F("Basic realm=\"Login Required\""));
+    server.send(401);
+  }
+
   String dataType = "text/plain";
   if (path.endsWith("/")) path += "index.htm";
 
   if (path.endsWith(".src")) path = path.substring(0, path.lastIndexOf("."));
-  else if (path.endsWith(".htm")) dataType = "text/html";
-  else if (path.endsWith(".css")) dataType = "text/css";
-  else if (path.endsWith(".js")) dataType = "application/javascript";
-  else if (path.endsWith(".png")) dataType = "image/png";
-  else if (path.endsWith(".gif")) dataType = "image/gif";
-  else if (path.endsWith(".jpg")) dataType = "image/jpeg";
-  else if (path.endsWith(".ico")) dataType = "image/x-icon";
-  else if (path.endsWith(".xml")) dataType = "text/xml";
-  else if (path.endsWith(".pdf")) dataType = "application/pdf";
-  else if (path.endsWith(".zip")) dataType = "application/zip";
-  else if (path.endsWith(".csv")) dataType = "text/txt";
+  else if (path.endsWith(".htm")) dataType = F("text/html");
+  else if (path.endsWith(".css")) dataType = F("text/css");
+  else if (path.endsWith(".js")) dataType = F("application/javascript");
+  else if (path.endsWith(".png")) dataType = F("image/png");
+  else if (path.endsWith(".gif")) dataType = F("image/gif");
+  else if (path.endsWith(".jpg")) dataType = F("image/jpeg");
+  else if (path.endsWith(".ico")) dataType = F("image/x-icon");
+  else if (path.endsWith(".xml")) dataType = F("text/xml");
+  else if (path.endsWith(".pdf")) dataType = F("application/pdf");
+  else if (path.endsWith(".zip")) dataType = F("application/zip");
+  else if (path.endsWith(".csv")) dataType = F("text/txt");
 
   File dataFile = SD.open(path.c_str());
   if (dataFile.isDirectory()) {
     path += "/index.htm";
-    dataType = "text/html";
+    dataType = F("text/html");
     dataFile = SD.open(path.c_str());
   }
 
   if (!dataFile)
     return false;
 
-  if (server.hasArg("download")) dataType = "application/octet-stream";
+  if (server.hasArg("download")) dataType = F("application/octet-stream");
 
   if (server.streamFile(dataFile, dataType) != dataFile.size()) {
     Serial.println(F("Sent less data than expected!"));
@@ -583,7 +575,7 @@ void printDirectory() {
   }
   dir.rewindDirectory();
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server.send(200, "text/json", "");
+  server.send(200, F("text/json"), "");
   WiFiClient client = server.client();
 
   server.sendContent(F("["));
@@ -610,7 +602,9 @@ void printDirectory() {
 }
 
 void handleNotFound() {
-  if (!digitalRead(SD_D) && loadFromSdCard(server.uri())) return;
+  bool loadResult = loadFromSdCard(server.uri());
+  if (!digitalRead(SD_D) && loadResult) return;
+
   String message = F("PLIKU NIE ZNALEZIONO\n\n");
   message += F("URI: ");
   message += server.uri();
@@ -622,7 +616,7 @@ void handleNotFound() {
   for (uint8_t i = 0; i < server.args(); i++) {
     message += " NAME:" + server.argName(i) + "\n VALUE:" + server.arg(i) + "\n";
   }
-  server.send(404, "text/plain", message);
+  server.send(404, F("text/plain"), message);
   Serial.print(message);
 }
 
@@ -630,5 +624,5 @@ double getTemp(JsonObject & addrset, int row) {
   byte tempaddr[8];
   for (int b = 0; b < 8; b++)
     tempaddr[b] = addrset["sensor"][row][b + 1];
-  return (round(10 * sensors.getTempC(tempaddr))) / 10;
+  return sensors.getTempC(tempaddr);
 }
