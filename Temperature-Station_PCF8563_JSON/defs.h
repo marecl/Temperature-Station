@@ -5,20 +5,19 @@
 #define SD_CS D4 //GPIO2
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 #define SETTINGS_FILE (char*)"SETTINGS.TXT"
-
+/*
+   Swap SD_D and SD_CS pins! Maybe then I'll can use interrupts
+*/
 #define MAX_SENSORS 16
 
 static bool httpserver = false;
 bool use_ntp = true;
-int zone = 0;
-bool letni = true;
+int8_t zone = 0;
+bool letni = false;
 String json = "";
 
-byte packetBuffer[48];
-
-String workfile = "TEMP.CSV";
-int valid_sensors = 0;
-int saved_ap = 0;
+uint8_t valid_sensors = 0;
+uint8_t saved_ap = 0;
 
 void bootFailHandler(int _code) {
   switch (_code) {
@@ -29,8 +28,8 @@ void bootFailHandler(int _code) {
     case 3: Serial.print(F("No card inserted\n")); break;
     case 4: Serial.println(F("Invalid JSON file"));
       Serial.println(F("Come back with valid one. Rebooting...")); break;
-    case 5: Serial.print(F("Could not connect to WiFi!\n"));
-      Serial.print(F("Log mode only\n")); break;
+    case 5:
+      Serial.print(F("Could not connect to WiFi!\nLog mode only\n")); break;
   }
   delay(1000);
   ESP.restart();
@@ -93,7 +92,20 @@ IPAddress stringToIP(String input) {
 }
 
 String IPtoString(IPAddress address) {
-  String out = String(address[0]) + "." + String(address[1]) + ".";
-  out = out + String(address[2]) + "." + String(address[3]);
+  String out;
+  for (int z = 0; z < 4; z++) {
+    out += String(address[z]);
+    if (z < 3)out += ".";
+  }
+  /*String out = String(address[0]) + "." + String(address[1]) + ".";
+    out = out + String(address[2]) + "." + String(address[3]);*/
   return out;
 }
+
+/*void noCard() {
+  Serial.println(F("NO SDCARD!"));
+  //noInterrupts();
+  while (digitalRead(SD_D));
+  Serial.println(F("SD Card found. Reboot..."));
+  ESP.restart();
+  }*/

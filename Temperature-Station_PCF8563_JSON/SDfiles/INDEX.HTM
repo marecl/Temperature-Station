@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <title>SD Editor</title>
+    <title>Temperature Station</title>
     <style type="text/css" media="screen">
       .contextMenu {
         z-index: 300;
@@ -182,6 +182,9 @@
         var mkfile = document.createElement("button");
         mkfile.innerHTML = 'MkFile';
         document.getElementById(element).appendChild(mkfile);
+		var sensors = document.createElement("button");
+        sensors.innerHTML = 'Sensors';
+        document.getElementById(element).appendChild(sensors);
   
         function httpPostProcessRequest(){
           if (xmlHttp.readyState == 4){
@@ -205,6 +208,11 @@
           createPath(path.value);
           editor.loadUrl(path.value);
         };
+		
+		sensors.onclick = function(e){
+          location.href = "/sensors";
+        };
+		
         mkdir.onclick = function(e){
           if(path.value.length < 2) return;
           var dir = path.value
@@ -553,15 +561,12 @@
               case "txt": lang = "plain"; break;
               case "htm": lang = "html"; break;
               case "js": lang = "javascript"; break;
-              case "c": lang = "c_cpp"; break;
-              case "cpp": lang = "c_cpp"; break;
+              case "html": lang = "html"; break;
               case "css":
               case "scss":
               case "php":
-              case "html":
               case "json":
               case "xml":
-              case "csv":
                 lang = ext;
             }
           }
@@ -574,7 +579,8 @@
 		var day = dateObj.getDate();
 		if(day < 10) day = "0" + day;
 		var year = dateObj.getFullYear();
-		var temppath = "/archiwum/" + year + month  + "/" + day + ".csv"; //Remember it takes date and time from client
+		var temppath = "/archiwum/" + year + month  + "/" + day + ".csv";
+		//Remember it takes date and time from client, not host
         if(typeof file === "undefined") file = temppath;
   
         if(typeof lang === "undefined"){
@@ -629,30 +635,8 @@
         editor.getSession().setTabSize(2);
         editor.setHighlightActiveLine(true);
         editor.setShowPrintMargin(false);
-        editor.commands.addCommand({
-            name: 'saveCommand',
-            bindKey: {win: 'Ctrl-S',  mac: 'Command-S'},
-            exec: function(editor) {
-              httpPost(file, editor.getValue()+"", type);
-            },
-            readOnly: false
-        });
-        editor.commands.addCommand({
-            name: 'undoCommand',
-            bindKey: {win: 'Ctrl-Z',  mac: 'Command-Z'},
-            exec: function(editor) {
-              editor.getSession().getUndoManager().undo(false);
-            },
-            readOnly: false
-        });
-        editor.commands.addCommand({
-            name: 'redoCommand',
-            bindKey: {win: 'Ctrl-Shift-Z',  mac: 'Command-Shift-Z'},
-            exec: function(editor) {
-              editor.getSession().getUndoManager().redo(false);
-            },
-            readOnly: false
-        });
+		editor.setReadOnly(true);
+		editor.commands.commmandKeyBinding={}
         httpGet(file);
         editor.loadUrl = function(filename){
           file = filename;
