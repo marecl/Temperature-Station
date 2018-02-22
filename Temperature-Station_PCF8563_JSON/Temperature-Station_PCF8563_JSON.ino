@@ -7,16 +7,25 @@
 #include <OneWire.h>
 #include <SD.h>
 #include <SPI.h>
-#include <SpritzCipher.h>
 #include <WiFiUdp.h>
-#include "defs.h"
+#define FS_NO_GLOBALS
+#include "FS.h"
 /*
-  Encrypt password in file
+  Fix selfAP on website
+
+  Swap SD_D and SD_CS pins! Maybe then I'll can use interrupts
+
+  Encrypt WiFi passwords in file
 
   Add option to change/update date&time via http
 
-  Change main page to FTP-like file explorer
+  Add links to main site
 */
+#define MAX_SENSORS 16
+
+bool httpserver = false;
+bool letni = false;
+
 ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdater;
 
@@ -25,9 +34,52 @@ DallasTemperature sensors(&oneWire);
 
 DynamicJsonBuffer jsonBuffer(1000);
 
+WiFiServer server(23);
+WiFiClient serverClients[1];
+
 Czas zegar(SDA, SCL); //SDA, SCL
 
+/*struct _setup {
+  char* selfName = "Temperature Station";
+  char* selfSSID = "Temperature Station";
+  char* selfWPA2 = "0123456789";
+  char* selfLOGIN = "admin";
+  char* selfPASS = "admin";
+  char* outSSID = "";
+  char* outPASS = "";
+  char* outIP = "";
+  char* outGW = "";
+  char* outMASK = "";
+  bool outDHCP = true;
+  bool useNTP = false;
+  bool selfAP = false;
+  char* ntpServer = "tempus1.gum.gov.pl";
+  uint32_t lastUpdate = 0; //epoch of last time update from NTP
+  uint8_t timezone = 0;
+  };
+*/
+struct _setup {
+  char selfName[32];
+  char selfSSID[32];
+  char selfWPA2[32];
+  char selfLOGIN[32];
+  char selfPASS[32];
+  char outSSID[32];
+  char outPASS[32];
+  char outIP[16];
+  char outGW[16];
+  char outMASK[16];
+  bool outDHCP;
+  bool useNTP;
+  bool selfAP;
+  char ntpServer[32];
+  uint32_t lastUpdate;
+  uint8_t timezone;
+} settings;
+
 void setup() {
+  WiFi.disconnect();
+  WiFi.persistent(false);
   Serial.begin(115200);
   Serial.setDebugOutput(false);
   pinMode(SD_D, INPUT);
@@ -36,6 +88,7 @@ void setup() {
   Serial.print(F("\n"));
   sensors.begin();
   sensors.requestTemperatures();
+
   if (!digitalRead(SD_D)) {
     if (SD.begin(SD_CS)) {
       Serial.println(F("SD Card initialized"));
@@ -43,26 +96,40 @@ void setup() {
         bootFailHandler(1);
     } else bootFailHandler(2);
   } else bootFailHandler(3);
-  File root = SD.open(SETTINGS_FILE , FILE_READ);
-  int tmp = root.read();
-  json = "";
-  while (tmp != -1) {
-    if (tmp != 32 && tmp != 9)
-      json += (char)tmp;
-    tmp = root.read();
+
+  SPIFFS.begin();
+
+  if (!SPIFFS.exists("/set.dat")) {
+    SPIFFS.remove("/set.dat");
+    Serial.println("Creating settings file...");
+    fs::File lel = SPIFFS.open("/set.dat", "w");
+    strcpy(settings.selfName, "Temperature Station");
+    strcpy(settings.selfSSID, "Temperature_Station");
+    strcpy(settings.selfWPA2, "0123456789");
+    strcpy(settings.selfLOGIN, "admin");
+    strcpy(settings.selfPASS, "admin");
+    settings.outDHCP = false;
+    settings.useNTP = false;
+    settings.selfAP = true;
+    settings.lastUpdate = 0;
+    settings.timezone = 0;
+    lel.write((const uint8_t*)&settings, sizeof(settings) / sizeof(char));
+    lel.flush();
+    lel.close();
   }
-  root.close();
+  fs::File lol = SPIFFS.open("/set.dat", "r");
+  lol.readBytes((char*)&settings, lol.size());
+  lol.close();
+  SPIFFS.end();
 
-  JsonObject& settings = jsonBuffer.parseObject(json);
-  if (!settings.success())
-    bootFailHandler(4);
+  settings.selfAP = true;
 
-  if (wifiConn(settings))
-    httpserver = true;
-  else bootFailHandler(5);
-
+  if (wifiConn()) httpserver = true;
   if (httpserver) {
-    server.on("/sensors", HTTP_GET, sensorSettings);
+    server.on("/settime", HTTP_POST, timeset);
+    server.on("/settings", devconfig);
+
+    server.on("/sensors", sensorSettings);
     server.on("/time", HTTP_GET, updatetime);
     server.on("/list", HTTP_GET, printDirectory);
     server.on("/", HTTP_DELETE, handleDelete);
@@ -71,53 +138,46 @@ void setup() {
       returnOK();
     }, handleFileUpload);
     server.on("/settings.txt", returnForbidden);
-    //Hard-coded "fuck you" peeker
     server.onNotFound(handleNotFound);
     httpUpdater.setup(&server);
     server.begin();
     Serial.println(F("HTTP server started"));
 
-    use_ntp = settings["use_ntp"];
-    if (use_ntp) {
-      unsigned long newTime = updateNTP(settings);
+    if (settings.useNTP) {
+      uint32_t newTime = updateNTP(settings.ntpServer);
       zegar.readRTC();
       Serial.println(printDateTime(zegar));
-      if (!zegar.CompareTimeEpoch(newTime, 5)) {
+      if (!zegar.compareTimeEpoch(newTime, 5)) {
         Serial.println(F("Adjusting time..."));
         zegar.setRTC(newTime);
         zegar.readRTC();
         Serial.println(printDateTime(zegar));
       }
+      if (newTime > settings.lastUpdate)
+        settings.lastUpdate = newTime;
     }
   }
 
-  valid_sensors = settings["valid_sensors"];
+  File root = SD.open(SETTINGS_FILE , FILE_READ);
+  JsonObject& nSet = jsonBuffer.parseObject(root);
+  root.close();
   Serial.println(F("\nSensors:"));
-  for (int a = 0; a < valid_sensors; a++) {
-    Serial.print((String)(a + 1) + "/" + (String)MAX_SENSORS + ": ");
-    String xdtmp = settings["sensor"][a][0];
+  int nSensor = nSet["sensor"].size();
+  for (int a = 0; a < nSensor; a++) {
+    Serial.print((String)(a + 1) + "/" + (String)nSensor + ": ");
+    String xdtmp = nSet["sensor"][a][0];
     Serial.print(xdtmp);
-    if (getTemp(settings, a) != -127)
+    if (getTemp(nSet, a) != -127)
       Serial.println(F(" Connected"));
     else
       Serial.println(F(" N/C"));
   }
+  saveSettings("/set.dat", settings);
   Serial.println();
 }
 
 void loop() {
-  File setfile = SD.open(SETTINGS_FILE , FILE_READ);
-  int tmp = setfile.read();
-  json = "";
-  while (tmp != -1) {
-    if (tmp != 32 && tmp != 9)
-      json += (char)tmp;
-    tmp = setfile.read();
-  }
-  setfile.close();
-  JsonObject& settings = jsonBuffer.parseObject(json);
-  //Okay, JSON loaded so now we can start loop
-  //Uhnfortunately I can't pass object from setup()
+  server.handleClient();
 
   while (1) {
     while (((zegar.minute() % 5) != 0) && !digitalRead(SD_D)) {
@@ -127,6 +187,7 @@ void loop() {
 
     if (!digitalRead(SD_D)) {
       sensors.requestTemperatures();
+      Serial.println("Zapis");
       if (!(zegar.day() > 31 || zegar.month() > 12 || zegar.minute() > 59 || zegar.hour() > 23)) {
         String path = "archiwum/" + (String)zegar.year();
         if (zegar.month() < 10) path += "0";
@@ -140,16 +201,24 @@ void loop() {
         path2 = new char[path.length() + 1];
         strcpy(path2, path.c_str());
 
+        File root = SD.open(SETTINGS_FILE , FILE_READ);
+        JsonObject& nSet = jsonBuffer.parseObject(root);
+        root.close();
+
         File dest = SD.open(path, FILE_WRITE);
         dest.print(printDateTime(zegar) + ";");
         dest.flush();
-        for (int c = 0; c < valid_sensors; c++) {
-          String tempname = settings["sensor"][c][0];
-          dest.print(tempname);
-          dest.print(F("="));
-          dest.print(getTemp(settings, c), 1);
-          dest.print(F(";"));
-          dest.flush();
+
+        for (int c = 0; c < nSet["sensor"].size(); c++) {
+          String tempname = nSet["sensor"][c][0];
+          double tempRead = getTemp(nSet, c);
+          if (tempRead != -127) {
+            dest.print(tempname);
+            dest.print(F("="));
+            dest.print(tempRead, 1);
+            dest.print(F(";"));
+            dest.flush();
+          }
         }
         dest.print(F("\r\n"));
         dest.flush();
@@ -169,157 +238,11 @@ void loop() {
   }
 }
 
-void sensorSettings() {
-  sensors.requestTemperatures();
-  DynamicJsonBuffer sensBuff(1000);
-
-  File root = SD.open(SETTINGS_FILE , FILE_READ);
-  int tmp = root.read();
-  json = "";
-  while (tmp != -1) {
-    if (tmp != 32 && tmp != 9)
-      json += (char)tmp;
-    tmp = root.read();
-  }
-  root.close();
-  JsonObject& sensSet = sensBuff.parseObject(json);
-
-  if (!sensSet.success())
-    return;
-
-  String changeName;
-  int changePos;
-
-  if (server.args() != 0) {
-    for (int x = server.args() - 1; x >= 0; x--) {
-      if (server.argName(x) == "Remove") {
-        JsonArray& setMain = sensSet["sensor"];
-        setMain.remove((atoi((server.arg(x)).c_str())));
-        valid_sensors--;
-        sensSet["valid_sensors"] = valid_sensors;
-        saveJson(sensSet);
-        if ((server.arg(x) == server.argName(x - 1)) && x > 0)
-          x -= 1;
-      } else {
-        changePos = atoi((server.argName(x)).c_str());
-        changeName = server.arg(x);
-        String currentName = sensSet["sensor"][changePos][0];
-        if (currentName != changeName)
-          sensSet["sensor"][changePos][0] = changeName;
-      }
-    }
-    saveJson(sensSet);
-    server.sendContent(F("HTTP/1.1 307 Temporary Redirect\r\n"));
-    server.sendContent(F("Location: /sensors\r\n"));
-    server.sendContent(F("Connection: Close\r\n\r\n"));
-    return;
-  }
-
-  uint8_t i;
-  uint8_t addr[8];
-  String temp;
-  uint8_t sensorRow;
-
-  server.sendContent(F("<!DOCTYPE html><html><head><title>Sensors</title>"));
-  server.sendContent(F("<style>table,th,td{border:1px solid black;"));
-  server.sendContent(F("text-align:center}</style></head>"));
-  server.sendContent(F("<body><table><caption><b>Available sensors</b></caption>"));
-  server.sendContent(F("<tr><th>Address (DEC)</th><th>Temperature</th><th>Name</th>"));
-  server.sendContent(F("<th>Name Settings</th>"));
-  server.sendContent(F("<form>"));
-
-  for (int a = 0; a < valid_sensors; a++) {
-    server.sendContent(F("<tr><td>"));
-    for (int b = 0; b < 8; b++)
-      addr[b] = sensSet["sensor"][a][b + 1];
-
-    for (i = 0; i < 8; i++) {
-      if (addr[i] < 100) server.sendContent(F("0"));
-      if (addr[i] < 10) server.sendContent(F("0"));
-      server.sendContent((String)addr[i]);
-      if (i < 7)
-        server.sendContent(F(","));
-    }
-    server.sendContent(F("</td><td>"));
-    if (getTemp(sensSet, a) != -127)
-      server.sendContent((String)sensors.getTempC(addr) + (char)176 + "C");
-    else
-      server.sendContent(F("N/C"));
-
-    server.sendContent(F("</td><td>"));
-    String tempName = sensSet["sensor"][a][0];
-
-    server.sendContent(tempName);
-    server.sendContent(F("</td><td><input type = \"text\" name = "));
-    server.sendContent(String(a)); //Position in file
-    server.sendContent(F(" value = "));
-    server.sendContent(tempName);
-    server.sendContent(F("><input type=\"checkbox\" name=\"Remove\" value= "));
-    server.sendContent(String(a));
-    server.sendContent(F(">Remove</td></tr>"));
-  }
-
-  while (oneWire.search(addr)) {
-    if (isMember(addr, sensSet, valid_sensors))
-      continue;
-
-    server.sendContent(F("<tr><td>"));
-    for (i = 0; i < 8; i++) {
-      if (addr[i] < 100) server.sendContent(F("0"));
-      if (addr[i] < 10) server.sendContent(F("0"));
-      server.sendContent((String)addr[i]);
-      if (i < 7)
-        server.sendContent(F(","));
-    }
-    if (OneWire::crc8(addr, 7) != addr[7]) {
-      server.sendContent(F("Invalid CRC!"));
-      return;
-    }
-    server.sendContent(F("</td><td>"));
-
-    valid_sensors += 1;
-    sensSet["valid_sensors"] = valid_sensors;
-    String tempname = addrToString(addr);
-    JsonArray& setMain = sensSet["sensor"];
-    JsonArray& newSet = setMain.createNestedArray();
-    newSet.add(tempname);
-    for (int x = 0; x < 8; x++)
-      newSet.add(addr[x]);
-    sensorRow = valid_sensors - 1;
-    saveJson(sensSet);
-
-    server.sendContent((String)sensors.getTempC(addr) + (char)176 + "C");
-    server.sendContent(F("</td><td><input type = \"text\" name = "));
-    server.sendContent(String(sensorRow)); //Position in file
-    server.sendContent(F(" value = New"));
-    server.sendContent(F("><input type=\"checkbox\" name=\"Remove\" value= "));
-    server.sendContent(String(sensorRow)); //Position in file
-    server.sendContent(F("></td></tr>"));
-  }
-  server.sendContent(F("<button type=\"submit\" value=\"Save\">Save Changes</button>"));
-  server.sendContent(F("<button type=\"reset\" value=\"Reset\">Reset</button>"));
-  server.sendContent(F("</form></table></body></html>"));
-  return;
-}
-
-void updatetime() {
-  /*Serial.print(F("Aktualizacja czasu!\nCzas przed: "));
-    Serial.println(printDateTime(zegar));
-
-    Serial.print(F("Czas po: "));
-    Serial.println(printDateTime(zegar));*/
-
-  server.sendContent(F("HTTP/1.1 307 Temporary Redirect\r\n"));
-  server.sendContent(F("Location: /\r\n"));
-  server.sendContent(F("Connection: Close\r\n\r\n"));
-}
-
-unsigned long updateNTP(JsonObject& timeSet) {
+unsigned long updateNTP(char* ntpServerName) {
   WiFiUDP udp;
   IPAddress timeServerIP;
   udp.begin(2390);
   delay(1000);
-  const char* ntpServerName = timeSet["ntp_server"];
   WiFi.hostByName(ntpServerName, timeServerIP);
   Serial.println(F("Sending NTP packet..."));
 
@@ -345,67 +268,274 @@ unsigned long updateNTP(JsonObject& timeSet) {
     unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
     unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
     unsigned long secsSince1900 = highWord << 16 | lowWord;
-    return (secsSince1900 - 2208988800UL + zone * 3600 + (int)letni * 3600);
+    return (secsSince1900 - 2208988800UL + (settings.timezone * 3600));
   }
   else return false;
 }
 
-bool wifiConn (JsonObject & wifiset) {
-  String tmpdhcp = wifiset["ip"]["mode"];
-  String ip = wifiset["ip"]["ip"];
-  String gate = wifiset["ip"]["gateway"];
-  String sub = wifiset["ip"]["subnet"];
-  saved_ap = wifiset["saved_ap"];
-
-  WiFi.mode(WIFI_STA); //WIFI_AP, WIFI_STA, WIFI_AP_STA
-  for (int xxx = 0; xxx < saved_ap; xxx++) {
-    String ssid = wifiset["wlan"][xxx][0];
-    String pass = wifiset["wlan"][xxx][1];
-    if (ssid == "-1" && pass == "-1") return false;
-    char *ssidc = new char[ssid.length() + 1];
-    strcpy(ssidc, ssid.c_str());
-    char *passc = new char[pass.length() + 1];
-    strcpy(passc, pass.c_str());
-    if (tmpdhcp == "static")
-      WiFi.config(stringToIP(ip), stringToIP(gate), stringToIP(sub));
-    WiFi.begin(ssidc, passc);
-    Serial.print(F("Connecting to "));
-    Serial.print(ssid);
-
-    delete[] passc;
-    delete[] ssidc;
-    // Wait for connection
-    uint8_t i = 0;
-
-    while (WiFi.status() != WL_CONNECTED && i++ < 20) { //wait 10 second()s
-      delay(500);
-      Serial.print(F("."));
+void devconfig() {
+  Serial.println();
+  if (server.method() == HTTP_POST) {
+    if (server.arg("action") == "load" && server.args() == 1) {
+      server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+      StaticJsonBuffer<500> output;
+      JsonObject& data = jsonBuffer.createObject();
+      data["selfName"] = settings.selfName;
+      data["selfSSID"] = settings.selfSSID;
+      data["selfLOGIN"] = settings.selfLOGIN;
+      data["outSSID"] = settings.outSSID;
+      data["outIP"] = settings.outIP;
+      data["outGW"] = settings.outGW;
+      data["outMASK"] = settings.outMASK;
+      data["outDHCP"] = settings.outDHCP;
+      data["useNTP"] = settings.useNTP;
+      data["selfAP"] = settings.selfAP;
+      data["ntpServer"] = settings.ntpServer;
+      data["timezone"] = settings.timezone;
+      //data["currTime"] = zegar.dateToEpoch();
+      String resp;
+      data.printTo(resp);
+      server.sendContent(resp);
+      data.prettyPrintTo(Serial);
     }
-
-    if (i >= 21 && WiFi.status() != WL_CONNECTED) {
-      Serial.println(F(" Fail"));
-      if ((xxx + 1) == saved_ap)
-        return false;
-      else continue;
+    if (server.arg("action") == "save") {
+      if (server.arg("selfName") != "")
+        strcpy(settings.selfName, server.arg("selfName").c_str());
+      if (server.arg("selfSSID") != "")
+        strcpy(settings.selfSSID, server.arg("selfSSID").c_str());
+      if (server.arg("selfWPA2") != "")
+        strcpy(settings.selfWPA2, server.arg("selfWPA2").c_str());
+      if (server.arg("selfLOGIN") != "")
+        strcpy(settings.selfLOGIN, server.arg("selfLOGIN").c_str());
+      if (server.arg("selfPASS") != "")
+        strcpy(settings.selfPASS, server.arg("selfPASS").c_str());
+      if (server.arg("outSSID") != "")
+        strcpy(settings.outSSID, server.arg("outSSID").c_str());
+      if (server.arg("outPASS") != "")
+        strcpy(settings.outPASS, server.arg("outPASS").c_str());
+      if (server.arg("outIP") != "")
+        strcpy(settings.outIP, server.arg("outIP").c_str());
+      if (server.arg("outGW") != "")
+        strcpy(settings.outGW, server.arg("outGW").c_str());
+      if (server.arg("outMASK") != "")
+        strcpy(settings.outMASK, server.arg("outMASK").c_str());
+      if (server.arg("ntpServer") != "")
+        strcpy(settings.ntpServer, server.arg("ntpServer").c_str());
+      if (server.arg("outDHCP") != "")
+        settings.outDHCP = toBool(server.arg("outDHCP"));
+      if (server.arg("useNTP") != "")
+        settings.useNTP = toBool(server.arg("useNTP"));
+      if (server.arg("selfAP") != "")
+        settings.selfAP = toBool(server.arg("selfAP"));
+      if (server.arg("lastUpdate") != "") {
+        uint32_t newLast = strtoul(server.arg("lastUpdate").c_str(), NULL, 10);
+        if (newLast > settings.lastUpdate)
+          settings.lastUpdate = newLast;
+      }
+      if (server.arg("timezone") != "")
+        settings.timezone = atoi(server.arg("timezone").c_str());
+      saveSettings("/set.dat", settings);
+      server.sendContent(F("\nHTTP/1.1 303 See Other\r\n"));
+      server.sendContent(F("Location: /settings\r\n"));
     }
+    if (server.arg("action") == "test") {
+      Serial.println(server.uri());
+      for (int x = server.args() - 1; x >= 0; x--) {
+        Serial.print(server.argName(x));
+        Serial.print("=");
+        Serial.println(server.arg(x));
+      }
+      server.sendContent(F("\nHTTP/1.1 303 See Other\r\n"));
+      server.sendContent(F("Location: /settings\r\n"));
+    }
+    if (server.arg("action") == "reset") {
+      SPIFFS.begin();
+      SPIFFS.remove("/set.dat");
+      SPIFFS.end();
+      ESP.restart();
+    }
+  } else loadFromSdCard("/set.htm");
+}
 
-    Serial.print(F(" Success\n"));
-    Serial.print(F("IP obtain mode: "));
-    if (tmpdhcp == "dhcp") {
-      Serial.println(F("DHCP"));
-      wifiset["ip"]["ip"] = IPtoString(WiFi.localIP());
-      wifiset["ip"]["gateway"] = IPtoString(WiFi.gatewayIP());
-      wifiset["ip"]["subnet"] = IPtoString(WiFi.subnetMask());
-      saveJson(wifiset);
-    } else Serial.println(F("Static"));
-    Serial.print(F("IP address: "));
-    Serial.println(WiFi.localIP());
-    Serial.print(F("Gateway: "));
-    Serial.println(WiFi.gatewayIP());
-    Serial.print(F("Subnet mask: "));
-    Serial.println(WiFi.subnetMask());
-    break;
+void timeset() {
+  /*server.sendContent(F("HTTP/1.1 307 Temporary Redirect\r\n"));
+    server.sendContent(F("Location: /\r\n"));
+    server.sendContent(F("Connection: Close\r\n\r\n"));*/
+  Serial.println("Timeset");
+  for (int x = server.args() - 1; x >= 0; x--) {
+    Serial.print(server.argName(x));
+    Serial.print("=");
+    Serial.println(server.arg(x));
   }
+}
+
+void sensorSettings() {
+  sensors.requestTemperatures();
+  DynamicJsonBuffer sensBuff(1000);
+  File tmpSens = SD.open(SETTINGS_FILE , FILE_READ);
+  JsonObject& sensSet = sensBuff.parseObject(tmpSens);
+  tmpSens.close();
+
+  if (!sensSet.success())
+    return;
+
+  String changeName;
+  int changePos;
+
+  if (server.args() != 0 && server.method() == HTTP_POST) {
+    for (int x = server.args() - 1; x >= 0; x--) {
+      if (server.argName(x) == "Remove") {
+        JsonArray& setMain = sensSet["sensor"];
+        setMain.remove((atoi((server.arg(x)).c_str())));
+        if ((server.arg(x) == server.argName(x - 1)) && x > 0)
+          x -= 1;
+      } else {
+        changePos = atoi((server.argName(x)).c_str());
+        changeName = server.arg(x);
+        String currentName = sensSet["sensor"][changePos][0];
+        if (currentName != changeName)
+          sensSet["sensor"][changePos][0] = changeName;
+      }
+    }
+    server.sendContent(F("HTTP/1.1 303 See Other\r\n"));
+    server.sendContent(F("Location: /sensors\r\n"));
+    saveJson(sensSet);
+  } else if (server.method() == HTTP_GET && server.args() == 0) {
+
+    uint8_t i;
+    uint8_t addr[8];
+    uint8_t sensorRow;
+
+    server.sendContent(F("<!DOCTYPE html><html><head><title>Sensors</title>"));
+    server.sendContent(F("<style>table, th, td{border: 1px solid black; "));
+    server.sendContent(F("text-align: center}</style></head>"));
+    server.sendContent(F("<body><table><caption><b>Available sensors </b > </caption>"));
+    server.sendContent(F("<tr><th>Address (DEC) </th> <th>Temperature </th><th>Name</th>"));
+    server.sendContent(F("<th>Name Settings </th>"));
+    server.sendContent(F("<form id=\"sensors\" method=\"POST\" action=\"/sensors\">"));
+
+    for (int a = 0; a < sensSet["sensor"].size(); a++) {
+      server.sendContent(F("<tr><td>"));
+      for (int b = 0; b < 8; b++)
+        addr[b] = sensSet["sensor"][a][b + 1];
+
+      for (i = 0; i < 8; i++) {
+        if (addr[i] < 100) server.sendContent(F("0"));
+        if (addr[i] < 10) server.sendContent(F("0"));
+        server.sendContent((String)addr[i]);
+        if (i < 7)
+          server.sendContent(F(","));
+      }
+      server.sendContent(F("</td><td>"));
+      if (getTemp(sensSet, a) != -127)
+        server.sendContent((String)sensors.getTempC(addr) + (char)176 + "C");
+      else
+        server.sendContent(F("N/C"));
+
+      server.sendContent(F("</td><td>"));
+      String tempName = sensSet["sensor"][a][0];
+
+      server.sendContent(tempName);
+      server.sendContent(F("</td><td><input type = \"text\" name = "));
+      server.sendContent(String(a)); //Position in file
+      server.sendContent(F(" value = "));
+      server.sendContent(tempName);
+      server.sendContent(F("><input type=\"checkbox\" name=\"Remove\" value= "));
+      server.sendContent(String(a));
+      server.sendContent(F(">Remove</td></tr>"));
+    }
+    bool anyNew = false;
+    while (oneWire.search(addr)) {
+      if (isMember(addr, sensSet))
+        continue;
+      else anyNew = true;
+
+      server.sendContent(F("<tr><td>"));
+      for (i = 0; i < 8; i++) {
+        if (addr[i] < 100) server.sendContent(F("0"));
+        if (addr[i] < 10) server.sendContent(F("0"));
+        server.sendContent((String)addr[i]);
+        if (i < 7)
+          server.sendContent(F(","));
+      }
+      if (OneWire::crc8(addr, 7) != addr[7]) {
+        server.sendContent(F("Invalid CRC!"));
+        return;
+      }
+      server.sendContent(F("</td><td>"));
+
+      String tempName = addrToString(addr);
+      JsonArray& setMain = sensSet["sensor"];
+      JsonArray& newSet = setMain.createNestedArray();
+      newSet.add(tempName);
+      for (int x = 0; x < 8; x++)
+        newSet.add(addr[x]);
+      sensorRow = sensSet["sensor"].size() - 1;
+
+      server.sendContent((String)sensors.getTempC(addr) + (char)176 + "C");
+      server.sendContent(F("</td><td><input type = \"text\" name = "));
+      server.sendContent(String(sensorRow)); //Position in file
+      server.sendContent(F(" value = New"));
+      server.sendContent(F("><input type=\"checkbox\" name=\"Remove\" value= "));
+      server.sendContent(String(sensorRow)); //Position in file
+      server.sendContent(F("></td></tr>"));
+    }
+    server.sendContent(F("<button type=\"submit\" value=\"Save\">Save Changes</button>"));
+    server.sendContent(F("<button type=\"reset\" value=\"Reset\">Reset</button>"));
+    server.sendContent(F("</form></table></body></html>"));
+    if (anyNew) saveJson(sensSet);
+  }
+  return;
+}
+
+void updatetime() {
+  /*Serial.print(F("Aktualizacja czasu!\nCzas przed: "));
+    Serial.println(printDateTime(zegar));
+
+    Serial.print(F("Czas po: "));
+    Serial.println(printDateTime(zegar));*/
+
+  server.sendContent(F("HTTP/1.1 307 Temporary Redirect\r\n"));
+  server.sendContent(F("Location: /\r\n"));
+  server.sendContent(F("Connection: Close\r\n\r\n"));
+}
+
+bool wifiConn () {
+  if (settings.selfAP) {
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.softAP(settings.selfSSID, settings.selfWPA2);
+  }
+  else WiFi.mode(WIFI_STA); //WIFI_AP, WIFI_STA, WIFI_AP_STA
+  if (!settings.outDHCP)
+    WiFi.config(stringToIP(settings.outIP), stringToIP(settings.outGW), stringToIP(settings.outMASK));
+
+  WiFi.begin(settings.outSSID, settings.outPASS);
+  Serial.print(F("Connecting to "));
+  Serial.print(settings.outSSID);
+  uint8_t i = 0;
+
+  while (WiFi.status() != WL_CONNECTED && i++ < 20) { //wait 10 seconds
+    delay(500);
+    Serial.print(F("."));
+  }
+
+  if (i >= 21 && WiFi.status() != WL_CONNECTED) {
+    Serial.println(F(" Fail"));
+    return false;
+  }
+
+  Serial.print(F(" Success\n"));
+  Serial.print(F("IP obtain mode: "));
+  if (settings.outDHCP)
+    Serial.println(F("DHCP"));
+  else Serial.println(F("Static"));
+  Serial.print(F("IP address: "));
+  Serial.println(WiFi.localIP());
+  Serial.print(F("Gateway: "));
+  Serial.println(WiFi.gatewayIP());
+  Serial.print(F("Subnet mask: "));
+  Serial.println(WiFi.subnetMask());
+
   return true;
 }
 
@@ -422,9 +552,10 @@ void returnForbidden() {
 }
 
 bool loadFromSdCard(String path) {
-  if (!server.authenticate("admin", "admin")) {
+  if (!server.authenticate(settings.selfLOGIN, settings.selfPASS)) {
     server.sendHeader(F("WWW-Authenticate"), F("Basic realm=\"Login Required\""));
     server.send(401);
+    return false;
   }
 
   String dataType = "text/plain";
@@ -545,7 +676,7 @@ void handleCreate() {
 void printDirectory() {
   if (!server.hasArg("dir")) return returnFail(F("BAD ARGS"));
   String path = server.arg("dir");
-  if (path != "/" && !SD.exists((char *)path.c_str()))
+  if (path != "/" && !SD.exists((char *)path.c_str()) || path == "/settings.txt")
     return returnFail(F("BAD PATH"));
   File dir = SD.open((char *)path.c_str());
   path = String();
@@ -563,9 +694,10 @@ void printDirectory() {
     File entry = dir.openNextFile();
     String forb = String(entry.name());
     forb.toLowerCase();
-    if (forb == (String)"settings.txt")
-    //Hard-coded "fuck you" for file manager
+    if (forb == (String)"settings.txt") {
+      cnt--;
       continue;
+    }
     if (!entry)
       break;
 
@@ -603,11 +735,4 @@ void handleNotFound() {
   }
   server.send(404, F("text/plain"), message);
   Serial.print(message);
-}
-
-double getTemp(JsonObject & addrset, int row) {
-  byte tempaddr[8];
-  for (int b = 0; b < 8; b++)
-    tempaddr[b] = addrset["sensor"][row][b + 1];
-  return sensors.getTempC(tempaddr);
 }

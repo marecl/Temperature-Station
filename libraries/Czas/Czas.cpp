@@ -1,9 +1,8 @@
 #include "Czas.h"
-
+#define LEAP_YEAR(Y) ( ((1970+(Y))>0) && !((1970+(Y))%4) && ( ((1970+(Y))%100) || !((1970+(Y))%400) ) )
 /* PCF8563 inferfacing library */
 
 Czas::Czas(byte sda_pin, byte scl_pin) {
-  dls = true;
   Wire.begin(sda_pin, scl_pin);
   Wire.beginTransmission(RTC_ADDR);
   Wire.write(0x0D);
@@ -39,8 +38,6 @@ void Czas::readRTC() {
 
 void Czas::setRTC(uint32_t t) {
   t -= 946684800UL;
-  t = t + (3600 * timezone);
-  if (this->dls) t += 3600;
   uint8_t ss = t % 60;
   t /= 60;
   uint8_t mm = t % 60;
@@ -91,15 +88,28 @@ void Czas::setRTC(uint8_t ss, uint8_t mm, uint8_t hh, uint16_t d, uint8_t dt, ui
   Wire.endTransmission();
 }
 
-uint32_t Czas::DateToEpoch(uint8_t ss, uint8_t mm, uint8_t hh, uint16_t d, uint8_t dt, uint8_t m, uint8_t r) {
-  Serial.println("Not implemented yet");
-  return 0;
+uint32_t Czas::dateToEpoch(uint8_t ss, uint8_t mm, uint8_t hh, uint16_t d, uint8_t m, uint8_t r) {
+  uint32_t dte = 946684800UL;
+  dte += ss;
+  dte += mm * 60;
+  dte += hh * 3600;
+  dte += d * 86400L;
+  
+  for (int a = 0; a < m; a++) 
+	dte+= (uint8_t)pgm_read_byte(daysInMonth + a - 1)*86400L;
+  
+  r-=2000;
+  dte += (r % 4) * 31536000;
+  dte += ((r - (r % 4)) / 4) * 126230400;
+  return (dte);
 }
 
-bool Czas::CompareTimeEpoch(uint32_t t, int tolerance) { //tolerance in seconds, less than 1 minute
+uint32_t Czas::dateAsEpoch(){
+	return(this->dateToEpoch(this->_second,this->_minute,this->_hour,this->_day,this->_month,this->_year));
+}
+
+bool Czas::compareTimeEpoch(uint32_t t, int tolerance) { //tolerance in seconds, less than 1 minute
   t -= 946684800UL;
-  t = t + (3600 * timezone);
-  if (this->dls) t += 3600;
   uint8_t ss = t % 60;
   t /= 60;
   uint8_t mm = t % 60;

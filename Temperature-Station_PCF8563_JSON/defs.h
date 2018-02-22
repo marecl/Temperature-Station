@@ -5,38 +5,32 @@
 #define SD_CS D4 //GPIO2
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 #define SETTINGS_FILE (char*)"SETTINGS.TXT"
-/*
-   Swap SD_D and SD_CS pins! Maybe then I'll can use interrupts
-*/
-#define MAX_SENSORS 16
 
-static bool httpserver = false;
-bool use_ntp = true;
-int8_t zone = 0;
-bool letni = false;
-String json = "";
-
-uint8_t valid_sensors = 0;
-uint8_t saved_ap = 0;
+double getTemp(JsonObject & addrset, int row) {
+  byte tempaddr[8];
+  for (int b = 0; b < 8; b++)
+    tempaddr[b] = addrset["sensor"][row][b + 1];
+  return sensors.getTempC(tempaddr);
+}
 
 void bootFailHandler(int _code) {
   switch (_code) {
-    default: return; break;
-    case 1: Serial.println(F("No settings file!")); break;
+    default: return;
+      break;
+    case 1: Serial.println(F("No sensors file!"));
+      break;
     case 2: Serial.println(F("SD Card detected but cannot be initialized!"));
       break;
-    case 3: Serial.print(F("No card inserted\n")); break;
-    case 4: Serial.println(F("Invalid JSON file"));
-      Serial.println(F("Come back with valid one. Rebooting...")); break;
-    case 5:
-      Serial.print(F("Could not connect to WiFi!\nLog mode only\n")); break;
+    case 3: Serial.print(F("No card inserted\n"));
+      break;
+    case 4: Serial.print(F("Could not connect to WiFi!\nLog mode only\n"));
+      break;
   }
-  delay(1000);
-  ESP.restart();
 }
 
-bool isMember(byte _1[], JsonObject& compObj, int _size) {
-  for (int a = 0; a < _size; a++) {
+bool isMember(byte _1[], JsonObject & compObj) {
+  int s = compObj["sensor"].size();
+  for (int a = 0; a < s; a++) {
     for (int b = 0; b < 8; b++) {
       byte _2 = compObj["sensor"][a][b + 1];
       if (_1[b] != _2)
@@ -54,7 +48,15 @@ String addrToString(uint8_t _addr[8]) {
   return out;
 }
 
-void saveJson(JsonObject &toSave) {
+void saveSettings(char* filename, struct _setup& tmp) {
+  if (SPIFFS.exists(filename)) SPIFFS.remove(filename);
+  fs::File toSave = SPIFFS.open("/set.dat", "w");
+  toSave.write((const uint8_t*)&tmp, sizeof(tmp) / sizeof(char));
+  toSave.flush();
+  toSave.close();
+}
+
+void saveJson(JsonObject & toSave) {
   if (SD.exists(SETTINGS_FILE))
     SD.remove(SETTINGS_FILE);
   File root = SD.open(SETTINGS_FILE, FILE_WRITE);
@@ -63,7 +65,7 @@ void saveJson(JsonObject &toSave) {
   root.close();
 }
 
-String printDateTime(Czas& timeobj) {
+String printDateTime(Czas & timeobj) {
   char datestring[20];
   snprintf_P(datestring,
              countof(datestring),
@@ -76,10 +78,10 @@ String printDateTime(Czas& timeobj) {
   return datestring;
 }
 
-IPAddress stringToIP(String input) {
+IPAddress stringToIP(char* input) {
   uint8_t parts[4] = {0, 0, 0, 0};
   uint8_t part = 0;
-  for (uint8_t a = 0; a < input.length(); a++) {
+  for (uint8_t a = 0; a < strlen(input); a++) {
     uint8_t b = input[a];
     if (b == '.') {
       part++;
@@ -97,15 +99,10 @@ String IPtoString(IPAddress address) {
     out += String(address[z]);
     if (z < 3)out += ".";
   }
-  /*String out = String(address[0]) + "." + String(address[1]) + ".";
-    out = out + String(address[2]) + "." + String(address[3]);*/
   return out;
 }
 
-/*void noCard() {
-  Serial.println(F("NO SDCARD!"));
-  //noInterrupts();
-  while (digitalRead(SD_D));
-  Serial.println(F("SD Card found. Reboot..."));
-  ESP.restart();
-  }*/
+bool toBool(String input) {
+  if (input[0] == '1') return true;
+  else return false;
+}
