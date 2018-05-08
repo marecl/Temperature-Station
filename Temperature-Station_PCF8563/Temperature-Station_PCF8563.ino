@@ -114,8 +114,6 @@ void setup() {
     lol.readBytes((char*)&settings, lol.size());
     lol.close();
   }
-  //strcpy(settings.ntpServer, "tempus1.gum.gov.pl");
-  saveSettings((char*)"/set.dat", settings);
   SPIFFS.end();
 
   bool iswifi = wifiConn();
@@ -148,22 +146,27 @@ void setup() {
   zegar.readRTC();
   if (settings.useNTP && iswifi) {
     String wo = String(settings.ntpServer);
+    wo.trim();
     char* ntpName = new char[wo.length() + 1];
     strcpy(ntpName, wo.c_str());
+    Serial.print("NTP server: ");
+    Serial.println(ntpName);
     uint32_t newTime = updateNTP(ntpName);
+    //uint32_t newTime = updateNTP("tempus1.gum.gov.pl");
     Serial.println(printDateTime(zegar));
-    if (!zegar.compareTimeEpoch(newTime, 5)) {
+    if (newTime != 0 && ((newTime - zegar.dateAsEpoch()) > 59)) {
       Serial.println(F("Adjusting time..."));
       zegar.setRTC(newTime);
       delay(100);
       zegar.readRTC();
       Serial.println(printDateTime(zegar));
-    }
-    if (newTime > settings.lastUpdate)
       settings.lastUpdate = newTime;
+    }
   }
+  //strcpy(settings.ntpServer, "tempus1.gum.gov.pl");
+  //settings.lastUpdate = 0;
+  saveSettings((char*)"/set.dat", settings);
   Serial.println(printDateTime(zegar));
-
 
   DynamicJsonBuffer jsonBuffer(1000);
   File root = SD.open(FPSTR(sensFile), FILE_READ);
@@ -220,10 +223,6 @@ void setup() {
           JsonObject& newEntry = devs.createNestedObject();
           newEntry["n"] = entry["n"];
           newEntry["a"] = entry["a"];
-        } else if (devs[entryCode]["n"] != entry["n"]) { //Edit name if changed
-          String chName = devs[entryCode]["n"];
-          chName += "\\" + entry["n"].as<String>();
-          devs[entryCode]["n"] = chName;
         }
       }
     }
@@ -302,11 +301,11 @@ void loop() {
       for (uint8_t c = 1; c < nSet.size(); c++) {
         double tempRead = getTemp(nSet[c]["a"]);
         if (tempRead != -127) {
+          if (!first) dest.print(F(","));
+          else first = false;
           dest.print(nSet[c]["n"].as<String>());
           dest.print(F("="));
           dest.print(tempRead, 1);
-          if (!first) dest.print(F(","));
-          else first = false;
           dest.flush();
         }
       }
@@ -445,7 +444,7 @@ uint32_t updateNTP(char* ntpServerName) {
     cb = udp.parsePacket();
   }
 
-  if (i < 10 && cb) {
+  if (cb) {
     udp.read(packetBuffer, 48);
     unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
     unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
@@ -736,7 +735,7 @@ bool wifiConn () {
     return false;
   }
 
-  Serial.print(F(" Success\n"));
+  Serial.println(F(" Success"));
   Serial.print(F("IP obtain mode: "));
   if (settings.outDHCP)
     Serial.println(F("DHCP"));

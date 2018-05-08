@@ -5,16 +5,18 @@
 #define SD_CS D4 //GPIO2
 
 /*
-#define SD_D A0
-#define SDA 5
-#define SCL 4
-#define OW_PORT 2
-#define SD_CS 16
+  #define SD_D A0
+  #define SDA 5
+  #define SCL 4
+  #define OW_PORT 2
+  #define SD_CS 16
 */
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
 bool isMember(byte _1[], JsonArray & compArr);
 int isMember(JsonArray & locArr, JsonObject & remObj);
+String addrToString(uint8_t _addr[8]);
+String addrToString(JsonArray& _addr);
 
 const char setsFile[] PROGMEM = "/set.dat";
 const char sensFile[] PROGMEM = "/sensors.txt";
@@ -68,6 +70,13 @@ String addrToString(uint8_t _addr[8]) {
   String out = "";
   for (uint8_t a = 0; a < 8; a++)
     out += String(_addr[a]);
+  return out;
+}
+
+String addrToString(JsonArray& _addr) {
+  String out = "";
+  for (uint8_t a = 0; (a < 8 && a < _addr.size()); a++)
+    out += _addr[a].as<String>();
   return out;
 }
 

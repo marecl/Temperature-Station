@@ -12,6 +12,6 @@ readRTC	KEYWORD2
 setRTC	KEYWORD2
 bcdToDec	KEYWORD2
 decToBcd	KEYWORD2
-dateToEpoch	KEYWORD2
-epochtoDate KEYWORD2
+dateAsEpoch	KEYWORD2
+epochToDate KEYWORD2
 compareTimeEpoch	KEYWORD2

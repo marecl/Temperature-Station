@@ -62,7 +62,7 @@ void Czas::setRTC(uint32_t t) {
     d -= dniwmsc;
   }
   d++;
-
+  if(r > 2000) r-=2000;
   Wire.beginTransmission(RTC_ADDR);
   Wire.write(0x02);
   Wire.write(this->decToBcd(ss)); //sek
@@ -84,7 +84,8 @@ void Czas::setRTC(uint8_t ss, uint8_t mm, uint8_t hh, uint16_t d, uint8_t dt, ui
   Wire.write(this->decToBcd(d)); //dzien
   Wire.write(this->decToBcd(dt)); //dzien tyg (1-7)
   Wire.write(this->decToBcd(m)); //msc
-  Wire.write(this->decToBcd(r - 2000)); //rok-2000
+  if(r > 2000) r -= 2000;
+  Wire.write(this->decToBcd(r)); //rok-2000
   Wire.endTransmission();
 }
 

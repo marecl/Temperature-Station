@@ -2,6 +2,7 @@
 ## I made this project for my father who needed to log activity of central heater  
 
 Please use PCF8563_JSON version.  
+I2C expander is ATmega board which will extend amount of sensors that can be connected (WIP).  
 
 If there is Error[500] use another browser (8563 donsent work with Edge but DS32321 does idk why)  
 	
