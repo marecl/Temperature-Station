@@ -1,3 +1,3 @@
 I2C expansion board for main devices.  
-Currently prototyping for 6 devices.  
-W.I.P.
+
+To add more devices change N_PORTS and fill _pins array with pins you'd like to use.

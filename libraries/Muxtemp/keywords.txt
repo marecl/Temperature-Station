@@ -1,0 +1,8 @@
+Muxtemp		KEYWORD1
+begin		KEYWORD2
+probePorts	KEYWORD2
+sendPorts	KEYWORD2
+readPorts	KEYWORD2
+getTemp		KEYWORD2
+getCount	KEYWORD2
+typeOf		KEYWORD2

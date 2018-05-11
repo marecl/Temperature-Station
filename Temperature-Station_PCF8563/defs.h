@@ -1,16 +1,16 @@
-#define SD_D D0 //GPIO16
-#define SDA D1 //GPIO5
-#define SCL D2 //GPIO4
-#define OW_PORT D3 //GPIO0
-#define SD_CS D4 //GPIO2
+/*#define SD_D D0 //GPIO16
+  #define SDA D1 //GPIO5
+  #define SCL D2 //GPIO4
+  #define OW_PORT D3 //GPIO0
+  #define SD_CS D4 //GPIO2*/
 
-/*
-  #define SD_D A0
-  #define SDA 5
-  #define SCL 4
-  #define OW_PORT 2
-  #define SD_CS 16
-*/
+
+#define SD_D A0
+#define SDA 5
+#define SCL 4
+#define OW_PORT 2
+#define SD_CS 16
+
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
 bool isMember(byte _1[], JsonArray & compArr);

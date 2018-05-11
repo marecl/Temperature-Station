@@ -83,6 +83,7 @@ void setup() {
   sensors.begin();
   sensors.requestTemperatures();
 
+  Serial.println(analogRead(SD_D));
   if (analogRead(SD_D) < 512) {
     if (SD.begin(SD_CS)) {
       Serial.println(F("SD Card initialized"));
@@ -92,8 +93,7 @@ void setup() {
   } else bootFailHandler(3);
 
   SPIFFS.begin();
-  if (!SPIFFS.exists(FPSTR(setsFile))) {
-    SPIFFS.remove("/set.dat");
+  if (!SPIFFS.exists("/set.dat")) {
     Serial.println("Creating settings file...");
     fs::File lel = SPIFFS.open("/set.dat", "w");
     strcpy(settings.selfName, "Temperature Station");
@@ -119,8 +119,8 @@ void setup() {
   bool iswifi = wifiConn();
   if (!iswifi) {
     WiFi.mode(WIFI_AP);
-    Serial.print(F("IP address: "));
     Serial.println(WiFi.softAP("testAP", "testAPpswd") ? "Ready" : "Failed!");
+    Serial.print(F("IP address: "));
     Serial.println(WiFi.softAPIP());
   }
 
@@ -169,8 +169,9 @@ void setup() {
   Serial.println(printDateTime(zegar));
 
   DynamicJsonBuffer jsonBuffer(1000);
-  File root = SD.open(FPSTR(sensFile), FILE_READ);
+  File root = SD.open("SENSORS.TXT", FILE_READ);
   JsonObject& nSet = jsonBuffer.parseObject(root);
+  nSet.printTo(root);
   root.close();
 
   Serial.println(F("\nLocal:"));
@@ -187,7 +188,8 @@ void setup() {
   uint8_t rtd = 0;
   while (rtd < nSet["remote"].size()) {
     JsonArray& locdata = nSet["remote"][rtd]["loc"];
-    int32_t pingresp = Pinger::Ping(locdata[1].as<const char*>());
+    Pinger ping;
+    int32_t pingresp = ping.Ping(locdata[1].as<const char*>());
     if (pingresp <= 0) {
       Serial.print("Device \"");
       Serial.print(locdata[0].as<String>());
@@ -314,7 +316,8 @@ void loop() {
       uint8_t rtd = 0;
       while (rtd < setts["remote"].size()) {
         JsonArray& locdata = setts["remote"][rtd]["loc"];
-        int32_t pingresp = Pinger::Ping(locdata[1].as<const char*>());
+        Pinger ping;
+        int32_t pingresp = ping.Ping(locdata[1].as<const char*>());
         if (pingresp <= 0) {
           Serial.print("Device \"");
           Serial.print(locdata[0].as<String>());
