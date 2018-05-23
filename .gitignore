@@ -47,6 +47,13 @@ Temporary Items
 .apdisk
 *.bin
 
-# Key files
+# Private key files
 key.h
 x509.h
+
+# KiCAD backup files
+*.bak
+*-bak
+
+# KiCAD net file
+*.net
