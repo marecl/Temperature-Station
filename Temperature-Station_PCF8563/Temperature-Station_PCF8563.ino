@@ -1,7 +1,7 @@
 #include <ArduinoJson.h> //github: bblanchon
 #include <Czas.h> //PCF8563 library
 #include <DallasTemperature.h>
-//#include <ESP8266HTTPUpdateServer.h>
+#include <ESP8266HTTPUpdateServer.h>
 //#include <ESP8266WebServer.h>
 #include <ESP8266WebServerSecure.h>
 #include <ESP8266WiFi.h>
@@ -9,40 +9,45 @@
 #include <Pinger.h> //Alessio Leoncini
 #include <SD.h>
 #include <SPI.h>
+#include <WiFiClient.h>
 #include <WiFiUdp.h>
+#include "settingsHandler.h"
+#include "html_set.h"
 
 #define FS_NO_GLOBALS
 #define DEFAULT_TIMEOUT 1000
 #include "FS.h"
 #include "defs.h"
-#define HTTP_LOGIN String(settings.selfLOGIN).c_str()
-#define HTTP_PASS String(settings.selfPASS).c_str()
+//#define HTTP_LOGIN String(settings.selfLOGIN).c_str()
+//#define HTTP_PASS String(settings.selfPASS).c_str()
 //Remake to decrypt from file
 
 /*
+  SPIFFS 4M+1M
+  Pinger 1.0.0
+  LwIP v2 Higher Bandwidth
+  When setting time - use GMT+0 time without DST  (DST will be automatic)
+
   You need to generate x509 key using script somewhere in ESP examples
 
   Automatic DST
 
-  Fix timezones on /settings
-
   Secure connection with slave but dosen't need to be
-
-  Set up AP automatically
 
   Fix HTTP update
 
-  Config hold in object (all save methods there)
+  Move index to be hard-coded
 
-  Move index and set to be hard-coded
+  SET: require authentication, confirm password to change it or username
 */
 #define MAX_SENSORS 16
 
 bool httpserver = false;
 bool letni = true;
-//ESP8266WebServer server(80);
-ESP8266WebServerSecure server(443);
-//ESP8266HTTPUpdateServer httpUpdater;
+ESP8266WebServer server(80);
+WiFiUDP udp;
+//ESP8266WebServerSecure server(443);
+ESP8266HTTPUpdateServer updServer;
 
 OneWire oneWire(OW_PORT);
 DallasTemperature sensors(&oneWire);
@@ -50,40 +55,45 @@ DallasTemperature sensors(&oneWire);
 WiFiClient telnet;
 
 Czas zegar(SDA, SCL); //SDA, SCL
-
-struct _setup {
-  char selfName[32];
-  char selfSSID[32];
-  char selfWPA2[32];
-  char selfLOGIN[32];
-  char selfPASS[32];
-  char outSSID[32];
-  char outPASS[32];
-  char outIP[16];
-  char outGW[16];
-  char outMASK[16];
-  bool outDHCP;
-  bool useNTP;
-  char ntpServer[32];
-  uint32_t lastUpdate;
-  uint8_t timezone;
-} settings;
+settingsHandler settings;
 
 void setup() {
-  WiFi.disconnect();
-  WiFi.persistent(false);
+  //ESP.eraseConfig();
+  //SPIFFS.format();
   Serial.begin(115200);
+  Serial.println(F("Temperature Station"));
   Serial.setDebugOutput(false);
+  Serial.println();
+  WiFi.persistent(false);
+
+  settings.serialDebug(&Serial);
+  settings.load("/set.txt");
+
+  bool gotwifi = false;
+  if (strcmp(settings.ssid(), "") != 0) {
+    Serial.print(F("\nConnecting to "));
+    Serial.print(settings.ssid());
+    Serial.print(F("... "));
+    if (settings.beginWiFi()) {
+      Serial.println(F("Success"));
+      Serial.println(WiFi.localIP());
+      gotwifi = true;
+    } else {
+      Serial.println(F("Connection failed"));
+      gotwifi = false;
+    }
+  }
+  if (!gotwifi) {
+    Serial.println(F("\nStarting Access Point..."));
+    settings.beginAP();
+    Serial.print(F("Connect to "));
+    Serial.println(settings.ssidAP());
+  }
+
   pinMode(SD_D, INPUT);
   pinMode(0, OUTPUT);
   digitalWrite(2, LOW);
-  //attachInterrupt(SD_D, noCard, HIGH);
-  //interrupts();
-  Serial.println();
-  sensors.begin();
-  sensors.requestTemperatures();
 
-  Serial.println(analogRead(SD_D));
   if (analogRead(SD_D) < 512) {
     if (SD.begin(SD_CS)) {
       Serial.println(F("SD Card initialized"));
@@ -92,44 +102,30 @@ void setup() {
     } else bootFailHandler(2);
   } else bootFailHandler(3);
 
-  SPIFFS.begin();
-  if (!SPIFFS.exists("/set.dat")) {
-    Serial.println("Creating settings file...");
-    fs::File lel = SPIFFS.open("/set.dat", "w");
-    strcpy(settings.selfName, "Temperature Station");
-    strcpy(settings.selfSSID, "Temperature_Station");
-    strcpy(settings.selfWPA2, "0123456789");
-    strcpy(settings.selfLOGIN, "admin");
-    strcpy(settings.selfPASS, "admin");
 
-    settings.outDHCP = false;
-    settings.useNTP = false;
-    settings.lastUpdate = 0;
-    settings.timezone = 0;
-    lel.write((const uint8_t*)&settings, sizeof(settings) / sizeof(char));
-    lel.flush();
-    lel.close();
-  } else {
-    fs::File lol = SPIFFS.open("/set.dat", "r");
-    lol.readBytes((char*)&settings, lol.size());
-    lol.close();
-  }
-  SPIFFS.end();
+  /*
+    IPAddress ip(192, 168, 2, 98);
+    IPAddress gateway(192, 168, 2, 1);
+    IPAddress subnet(255, 255, 255, 0);
+    settings.configAP("TemperatureStation", "TemperatureStation");
+    settings.useDHCP(false);
+    settings.name("TemperatureStation");
+    settings.configIP(ip, gateway, subnet);
+    settings.ntpServer("tempus1.gum.gov.pl");
+    settings.timezone = 1;
+    settings.useNTP = true;
+    Serial.println("Saving");
+    settings.save("/set.txt");
+    Serial.println("Loading");
+  */
 
-  bool iswifi = wifiConn();
-  if (!iswifi) {
-    WiFi.mode(WIFI_AP);
-    Serial.println(WiFi.softAP("testAP", "testAPpswd") ? "Ready" : "Failed!");
-    Serial.print(F("IP address: "));
-    Serial.println(WiFi.softAPIP());
-  }
-
-  server.setServerKeyAndCert_P(rsakey, sizeof(rsakey), x509, sizeof(x509));
+  settings.configUpdateServer(&server, &updServer);
+  //server.setServerKeyAndCert_P(rsakey, sizeof(rsakey), x509, sizeof(x509));
   server.on("/settime", HTTP_POST, timeset);
   server.on("/settings", devconfig);
 
   server.on("/sensors", sensorSettings);
-  //server.on("/time", HTTP_GET, timeset);
+  server.on("/time", HTTP_POST, timeset);
   server.on("/list", HTTP_GET, printDirectory);
   server.on("/sysinfo", HTTP_GET, httpinfo);
   server.on("/", HTTP_DELETE, handleDelete);
@@ -137,37 +133,34 @@ void setup() {
   server.on("/", HTTP_POST, []() {
     returnOK();
   }, handleFileUpload);
-  server.on("/settings.txt", returnForbidden);
   server.onNotFound(handleNotFound);
-  //httpUpdater.setup(&server, "/update", "admin", "admin");
   server.begin();
   Serial.println(F("HTTP server started"));
 
   zegar.readRTC();
-  if (settings.useNTP && iswifi) {
-    String wo = String(settings.ntpServer);
-    wo.trim();
-    char* ntpName = new char[wo.length() + 1];
-    strcpy(ntpName, wo.c_str());
+  if (settings.useNTP && gotwifi) {
+    udp.begin(2390);
+    delay(1000);
     Serial.print("NTP server: ");
-    Serial.println(ntpName);
-    uint32_t newTime = updateNTP(ntpName);
-    //uint32_t newTime = updateNTP("tempus1.gum.gov.pl");
-    Serial.println(printDateTime(zegar));
+    Serial.println(settings.ntpServer());
+    uint32_t newTime = updateNTP(settings.ntpServer());
+    Serial.println(newTime);
+    Serial.println(zegar.dateAsEpoch());
     if (newTime != 0 && ((newTime - zegar.dateAsEpoch()) > 59)) {
       Serial.println(F("Adjusting time..."));
       zegar.setRTC(newTime);
-      delay(100);
+      delay(10);
       zegar.readRTC();
       Serial.println(printDateTime(zegar));
       settings.lastUpdate = newTime;
     }
+    settings.save("/set.txt");
   }
-  //strcpy(settings.ntpServer, "tempus1.gum.gov.pl");
-  //settings.lastUpdate = 0;
-  saveSettings((char*)"/set.dat", settings);
+  if (zegar.dateAsEpoch() < 59) zegar.setRTC(settings.lastUpdate);
   Serial.println(printDateTime(zegar));
 
+  sensors.begin();
+  sensors.requestTemperatures();
   DynamicJsonBuffer jsonBuffer(1000);
   File root = SD.open("SENSORS.TXT", FILE_READ);
   JsonObject& nSet = jsonBuffer.parseObject(root);
@@ -186,10 +179,9 @@ void setup() {
 
   //Refreshing slaves config
   uint8_t rtd = 0;
-  while (rtd < nSet["remote"].size()) {
+  while (rtd < nSet["remote"].size() && gotwifi) {
     JsonArray& locdata = nSet["remote"][rtd]["loc"];
-    Pinger ping;
-    int32_t pingresp = ping.Ping(locdata[1].as<const char*>());
+    int32_t pingresp = Pinger::Ping(locdata[1].as<const char*>());
     if (pingresp <= 0) {
       Serial.print("Device \"");
       Serial.print(locdata[0].as<String>());
@@ -263,12 +255,24 @@ void setup() {
   yield();
 }
 
+bool doIdle = true;
+bool outLoop = false;
+
 void loop() {
-  while (((zegar.minute() % 5) != 0) && analogRead(SD_D) < 512) {
-    zegar.readRTC();
-    server.handleClient();
-    yield();
+idle:
+  zegar.readRTC();
+  server.handleClient();
+  yield();
+  if (((zegar.minute() % 5) == 0) && !outLoop && analogRead(SD_D) < 512) {
+    doIdle = false;
+    outLoop = true;
   }
+  yield();
+  if (outLoop)
+    if ((zegar.minute() % 5) != 0)
+      outLoop = false;
+  yield();
+  if (doIdle) goto idle;
 
   if (analogRead(SD_D) < 512) {
     sensors.requestTemperatures();
@@ -296,28 +300,25 @@ void loop() {
 
       File dest = SD.open(path, FILE_WRITE);
       dest.print(printDateTime(zegar) + ";");
-      dest.print(String(settings.selfName));
+      dest.print(settings.name());
       dest.print(":(");
       dest.flush();
       bool first = true;
       for (uint8_t c = 1; c < nSet.size(); c++) {
         double tempRead = getTemp(nSet[c]["a"]);
-        if (tempRead != -127) {
-          if (!first) dest.print(F(","));
-          else first = false;
-          dest.print(nSet[c]["n"].as<String>());
-          dest.print(F("="));
-          dest.print(tempRead, 1);
-          dest.flush();
-        }
+        if (!first) dest.print(F(","));
+        else first = false;
+        dest.print(nSet[c]["n"].as<String>());
+        dest.print(F("="));
+        dest.print(tempRead, 1);
+        dest.flush();
       }
       dest.println(F(");"));
 
       uint8_t rtd = 0;
       while (rtd < setts["remote"].size()) {
         JsonArray& locdata = setts["remote"][rtd]["loc"];
-        Pinger ping;
-        int32_t pingresp = ping.Ping(locdata[1].as<const char*>());
+        int32_t pingresp = Pinger::Ping(locdata[1].as<const char*>());
         if (pingresp <= 0) {
           Serial.print("Device \"");
           Serial.print(locdata[0].as<String>());
@@ -362,12 +363,7 @@ void loop() {
     Serial.println(F("SD Card found. Reboot..."));
     ESP.restart();
   }
-
-  while (((zegar.minute() % 5) == 0) && analogRead(SD_D) < 512) {
-    zegar.readRTC();
-    server.handleClient();
-    yield();
-  }
+  doIdle = true;
 }
 
 bool sendToSlave(String _data, const char* _loc) {
@@ -416,10 +412,8 @@ String getFromSlave(int _code, const char* _loc) {
   return "NO";
 }
 
-uint32_t updateNTP(char* ntpServerName) {
-  WiFiUDP udp;
+uint32_t updateNTP(const char* ntpServerName) {
   IPAddress timeServerIP;
-  udp.begin(2390);
   WiFi.hostByName(ntpServerName, timeServerIP);
   Serial.println(F("Sending NTP packet..."));
 
@@ -435,25 +429,27 @@ uint32_t updateNTP(char* ntpServerName) {
   packetBuffer[14] = 49;
   packetBuffer[15] = 52;
 
-  int cb = udp.parsePacket();
-
+  int cb;
   uint8_t i = 0;
-  while (!cb && i++ < 10) {
+
+  do {
     udp.beginPacket(timeServerIP, 123);
     udp.write(packetBuffer, 48);
     udp.endPacket();
     udp.flush();
     delay(1000);
     cb = udp.parsePacket();
-  }
+  } while (!cb && i++ < 10);
+
+  udp.read(packetBuffer, 48);
 
   if (cb) {
-    udp.read(packetBuffer, 48);
     unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
     unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
     unsigned long secsSince1900 = highWord << 16 | lowWord;
     secsSince1900 = secsSince1900 - 2208988800UL;
     secsSince1900 += settings.timezone * 3600;
+    if (letni) secsSince1900 += 3600;
     Serial.println(secsSince1900);
     return secsSince1900;
   } else return false;
@@ -466,18 +462,18 @@ void devconfig() {
       server.setContentLength(CONTENT_LENGTH_UNKNOWN);
       StaticJsonBuffer<500> output;
       JsonObject& data = output.createObject();
-      data["selfName"] = settings.selfName;
-      data["selfSSID"] = settings.selfSSID;
-      data["selfLOGIN"] = settings.selfLOGIN;
-      data["outSSID"] = settings.outSSID;
-      data["outIP"] = settings.outIP;
-      data["outGW"] = settings.outGW;
-      data["outMASK"] = settings.outMASK;
-      data["outDHCP"] = settings.outDHCP;
+      data["selfName"] = settings.name();
+      data["selfSSID"] = settings.ssidAP();
+      data["outSSID"] = settings.ssid();
+      data["outIP"] = IPtoString(settings.localIP());
+      data["outGW"] = IPtoString(settings.gatewayIP());
+      data["outMASK"] = IPtoString(settings.subnetMask());
+      data["outDHCP"] = settings.useDHCP();
+      data["login"] = settings.username();
       data["useNTP"] = settings.useNTP;
-      data["ntpServer"] = settings.ntpServer;
+      data["ntpServer"] = settings.ntpServer();
       data["timezone"] = settings.timezone;
-      //data["currTime"] = zegar.dateToEpoch();
+      data["currTime"] = zegar.dateAsEpoch();
       String resp;
       data.printTo(resp);
       server.sendContent(resp);
@@ -485,46 +481,46 @@ void devconfig() {
       data.prettyPrintTo(Serial);
     }
     if (server.arg("action") == "save") {
-      if (server.arg("selfName") != "")
+      /*if (server.arg("selfName") != "")
         strcpy(settings.selfName, server.arg("selfName").c_str());
-      if (server.arg("selfSSID") != "")
+        if (server.arg("selfSSID") != "")
         strcpy(settings.selfSSID, server.arg("selfSSID").c_str());
-      if (server.arg("selfWPA2") != "")
+        if (server.arg("selfWPA2") != "")
         strcpy(settings.selfWPA2, server.arg("selfWPA2").c_str());
-      if (server.arg("selfLOGIN") != "")
+        if (server.arg("selfLOGIN") != "")
         strcpy(settings.selfLOGIN, server.arg("selfLOGIN").c_str());
-      if (server.arg("selfPASS") != "")
+        if (server.arg("selfPASS") != "")
         strcpy(settings.selfPASS, server.arg("selfPASS").c_str());
-      if (server.arg("outSSID") != "")
+        if (server.arg("outSSID") != "")
         strcpy(settings.outSSID, server.arg("outSSID").c_str());
-      if (server.arg("outPASS") != "")
+        if (server.arg("outPASS") != "")
         strcpy(settings.outPASS, server.arg("outPASS").c_str());
-      if (server.arg("outIP") != "")
+        if (server.arg("outIP") != "")
         strcpy(settings.outIP, server.arg("outIP").c_str());
-      if (server.arg("outGW") != "")
+        if (server.arg("outGW") != "")
         strcpy(settings.outGW, server.arg("outGW").c_str());
-      if (server.arg("outMASK") != "")
+        if (server.arg("outMASK") != "")
         strcpy(settings.outMASK, server.arg("outMASK").c_str());
-      if (server.arg("ntpServer") != "")
+        if (server.arg("ntpServer") != "")
         strcpy(settings.ntpServer, server.arg("ntpServer").c_str());
-      if (server.arg("outDHCP") != "")
+        if (server.arg("outDHCP") != "")
         settings.outDHCP = toBool(server.arg("outDHCP"));
-      if (server.arg("useNTP") != "")
+        if (server.arg("useNTP") != "")
         settings.useNTP = toBool(server.arg("useNTP"));
-      if (server.arg("epoch") != "NaN") {
+        if (server.arg("epoch") != "NaN") {
         uint32_t newLast = strtoul(server.arg("lastUpdate").c_str(), NULL, 10);
         newLast += 3600 * settings.timezone + 3600 * (int)letni;
         Serial.println(newLast);
         if (newLast > settings.lastUpdate)
           settings.lastUpdate = newLast;
-      }
-      if (server.arg("timezone") != "")
+        }
+        if (server.arg("timezone") != "")
         settings.timezone = atoi(server.arg("timezone").c_str());
-      SPIFFS.begin();
-      saveSettings((char*)"/set.dat", settings);
-      SPIFFS.end();
-      server.sendContent(F("\nHTTP/1.1 303 See Other\r\n"));
-      server.sendContent(F("Location: /settings\r\n"));
+        SPIFFS.begin();
+        saveSettings((char*)"/set.dat", settings);
+        SPIFFS.end();
+        server.sendContent(F("\nHTTP/1.1 303 See Other\r\n"));
+        server.sendContent(F("Location: /settings\r\n"));*/
     }
     if (server.arg("action") == "test") {
       Serial.println(server.uri());
@@ -542,7 +538,7 @@ void devconfig() {
       SPIFFS.end();
       ESP.restart();
     }
-  } else loadFromSdCard("/set.htm");
+  } else server.send(200, "text/html", html_settings);
 }
 
 void timeset() {
@@ -553,36 +549,31 @@ void timeset() {
       Serial.print("=");
       Serial.println(server.arg(x));
     }
-  } else if (server.arg("action") == "reset") {
-    SPIFFS.begin();
-    SPIFFS.remove("/set.dat");
-    SPIFFS.end();
-    ESP.restart();
   } else if (server.arg("action") == "save") {
     if (server.arg("timezone") != "")
       settings.timezone = atoi(server.arg("timezone").c_str());
     if (server.arg("useNTP") != "")
       settings.useNTP = toBool(server.arg("useNTP"));
     if (server.arg("ntpServer") != "")
-      strcpy(settings.ntpServer, server.arg("ntpServer").c_str());
+      settings.ntpServer(server.arg("ntpServer").c_str());
     if (server.arg("epoch") != "NaN") {
       uint32_t newLast = strtoul(server.arg("epoch").c_str(), NULL, 10);
-      newLast += 3600 * settings.timezone + 3600 * (int)letni;
+      newLast += 3600 * settings.timezone;
+      if (letni) newLast += 3600;
       Serial.println(newLast);
+      zegar.setRTC(newLast);
       settings.lastUpdate = newLast;
     }
-    SPIFFS.begin();
-    //saveSettings("/set.dat", settings);
-    Serial.println("Zapis czasu");
-    SPIFFS.end();
+    Serial.println(F("Zapis czasu"));
+    settings.save("/set.txt");
   }
   server.sendContent(F("\nHTTP/1.1 303 See Other\r\n"));
   server.sendContent(F("Location: /settings\r\n"));
 }
 
 void sensorSettings() {
-  if (!server.authenticate((char*)HTTP_LOGIN, (char*)HTTP_PASS))
-    return server.requestAuthentication();
+  //if (!server.authenticate((char*)HTTP_LOGIN, (char*)HTTP_PASS))
+  //  return server.requestAuthentication();
   sensors.requestTemperatures();
   DynamicJsonBuffer sensBuff(1000);
   File tmpSens = SD.open(FPSTR(sensFile) , FILE_READ);
@@ -618,6 +609,7 @@ void sensorSettings() {
     uint8_t i;
     uint8_t addr[8];
     uint8_t sensorRow;
+    sensors.requestTemperatures();
 
     server.sendContent(F("<!DOCTYPE html><html><head><title>Sensors</title>"));
     server.sendContent(F("<style>table, th, td{border: 1px solid black; "));
@@ -707,50 +699,14 @@ void sensorSettings() {
 }
 
 void httpinfo() {
-  if (!server.authenticate((char*)HTTP_LOGIN, (char*)HTTP_PASS))
-    return server.requestAuthentication();
+  //if (!server.authenticate((char*)HTTP_LOGIN, (char*)HTTP_PASS))
+  //  return server.requestAuthentication();
 
   server.sendContent(F("<!DOCTYPE html><html>\
   <head><title>System info</title></head>"));
   server.sendContent(F("<body><b>Not implemented yet</b>"));
   server.sendContent(F("<a href=\"/\"><button>Strona glowna</button></a>"));
   server.sendContent(F("</body></html>"));
-}
-
-bool wifiConn () {
-  if (String(settings.outSSID) == "") return false;
-  WiFi.mode(WIFI_STA); //WIFI_AP, WIFI_STA, WIFI_AP_STA
-  if (!settings.outDHCP)
-    WiFi.config(stringToIP(settings.outIP), stringToIP(settings.outGW), stringToIP(settings.outMASK));
-
-  WiFi.begin(settings.outSSID, settings.outPASS);
-  Serial.print(F("Connecting to "));
-  Serial.print(settings.outSSID);
-
-  uint8_t i = 0;
-  while (WiFi.status() != WL_CONNECTED && i++ < 20) { //wait 10 seconds
-    delay(500);
-    Serial.print(F("."));
-  }
-
-  if (i >= 21 && WiFi.status() != WL_CONNECTED) {
-    Serial.println(F(" Fail"));
-    return false;
-  }
-
-  Serial.println(F(" Success"));
-  Serial.print(F("IP obtain mode: "));
-  if (settings.outDHCP)
-    Serial.println(F("DHCP"));
-  else Serial.println(F("Static"));
-  Serial.print(F("IP address: "));
-  Serial.println(WiFi.localIP());
-  Serial.print(F("Gateway: "));
-  Serial.println(WiFi.gatewayIP());
-  Serial.print(F("Subnet mask: "));
-  Serial.println(WiFi.subnetMask());
-
-  return true;
 }
 
 void returnOK() {
@@ -766,11 +722,11 @@ void returnForbidden() {
 }
 
 bool loadFromSdCard(String path) {
-  if (!server.authenticate(settings.selfLOGIN, settings.selfPASS)) {
+  /*if (!server.authenticate(settings.selfLOGIN, settings.selfPASS)) {
     server.sendHeader(F("WWW-Authenticate"), F("Basic realm=\"Login Required\""));
     server.send(401);
     return false;
-  }
+    }*/
 
   String dataType = "text/plain";
   if (path.endsWith("/")) path += "index.htm";
@@ -956,12 +912,4 @@ double getTemp(JsonArray & addrset) {
   for (int b = 0; b < 8; b++)
     tempaddr[b] = addrset[b];
   return sensors.getTempC(tempaddr);
-}
-
-void saveSettings(char* filename, struct _setup & tmp) {
-  if (SPIFFS.exists(filename)) SPIFFS.remove(filename);
-  fs::File toSave = SPIFFS.open("/set.dat", "w");
-  toSave.write((const uint8_t*)&tmp, sizeof(tmp));
-  toSave.flush();
-  toSave.close();
 }

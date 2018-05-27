@@ -1,13 +1,16 @@
 #include <ArduinoJson.h>
 #include <DallasTemperature.h>
 #include <ESP8266HTTPUpdateServer.h>
-#include <ESP8266WebServer.h>//
+#include <ESP8266mDNS.h>
+#include <ESP8266WebServer.h>
 //#include <ESP8266WebServerSecure.h>
 #include <ESP8266WiFi.h>
-#include "set_htm.h"
 #include <OneWire.h>
 #include <WiFiClient.h>
 #include <WiFiServer.h>
+#include "FS.h"
+#include "settingsHandler.h"
+#include "set_htm.h"
 
 static const uint8_t x509[] PROGMEM = {
 #include "x509.h"
@@ -17,18 +20,18 @@ static const uint8_t rsakey[] PROGMEM = {
 };
 
 /*
-   Create config
-   Webserver with config
-   Secure only webserver
-   Consider WifiManager
+   Strona zmiany danych logowania
+   Zrobic strone z ustawieniami ktora dziala
+   Zapis / odczyt ustawien
 
    sens.txt -> sensors
    temp.txt -> readings
    set.txt  -> settings
+
+   SPIFFS 1M+64K
 */
 
-char* wifi_ssid = "xxx";
-char* wifi_pass = "xxx";
+settingsHandler settings;
 
 ESP8266WebServer server(80);
 //ESP8266WebServerSecure server(443);
@@ -37,31 +40,47 @@ OneWire oneWire(2);
 DallasTemperature sensors(&oneWire);
 WiFiServer telnet(23);
 WiFiClient telnetClient;
-#include "FS.h"
 
 void setup() {
   Serial.begin(115200);
-  Serial.print("\r\nWololo");
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-  WiFi.persistent(false);
-  IPAddress ip(192, 168, 2, 120);
-  IPAddress gateway(192, 168, 2, 1);
-  IPAddress subnet(255, 255, 255, 0);
-  WiFi.config(ip, gateway, subnet);
-  WiFi.begin(wifi_ssid, wifi_pass);
-  int i = 0;
-  while (WiFi.status() != WL_CONNECTED && i++ < 20) { //wait 10 seconds
-    delay(500);
-    Serial.print(F("."));
+  Serial.setDebugOutput(true);
+  Serial.println(F("\r\nWololo"));
+
+  //IPAddress ip(192, 168, 2, 120);
+  //IPAddress gateway(192, 168, 2, 1);
+  //IPAddress subnet(255, 255, 255, 0);
+
+  if (!settings.load("/set.txt")) {
+    Serial.println("Brak");
   }
-  if (WiFi.status() != WL_CONNECTED) Serial.println("FAIL");
-  else Serial.println(WiFi.localIP());
+  //settings.configAP("TemperatureSlave", "TemperatureSlave");
+  //settings.useDHCP(false);
+  //settings.name("Pokoj");
+  //settings.configIP(ip, gateway, subnet);
+  settings.configUpdateServer(&server, &updServer);
+  settings.serialDebug(&Serial);
+  //settings.save("/set.txt");
+
+  bool gotwifi = false;
+  if (strcmp(settings.ssid(), "") != 0) gotwifi = true;
+  if (gotwifi) {
+    Serial.print(F("\nConnecting to "));
+    Serial.print(settings.ssid());
+    Serial.print(F("... "));
+    if (settings.beginWiFi()) {
+      Serial.println(F("Success"));
+      Serial.println(WiFi.localIP());
+    } else Serial.println(F("Connection failed"));
+  } else {
+    Serial.println(F("Starting Access Point..."));
+    settings.beginAP();
+  }
+
   //server.setServerKeyAndCert_P(rsakey, sizeof(rsakey), x509, sizeof(x509));
   server.on("/", sensorsPreview);
   server.on("/settings", devconfig);
+
   //server.addHandler(&httpHandler);
-  updServer.setup(&server, "/update", "admin", "admin");
   telnet.setNoDelay(true);
   sensors.begin();
   server.begin();
@@ -72,10 +91,8 @@ void setup() {
   DynamicJsonBuffer jsonBuffer(375);
   File root = SPIFFS.open("/sens.txt" , "r");
   JsonArray& nSet = jsonBuffer.parseArray(root);
-  root.close();
-  SPIFFS.end();
 
-  Serial.print(F("\r\nLocal:\r\n"));
+  Serial.print(F("\r\nLocal: \r\n"));
   int nSensor = nSet.size();
   for (int a = 0; a < nSensor; a++) {
     Serial.print('\t' + (String)(a + 1) + "/" + (String)(nSensor) + ": ");
@@ -84,9 +101,12 @@ void setup() {
       Serial.println(F(" Connected"));
     else Serial.println(F(" N/C"));
   }
+  root.close();
+  SPIFFS.end();
 }
 
 void loop() {
+  if (Serial.available()) Serial.write(Serial.read());
   server.handleClient();
   yield();
   sensors.requestTemperatures();
@@ -181,7 +201,7 @@ int handleRequest(String _in) {
               _tempfile.print("[");
               first = false;
             }
-            else _tempfile.print(",");
+            else _tempfile.print(", ");
             _tempfile.print("[\"" + _devs[a]["n"].as<String>() + "\",");
             _tempfile.print(readTemp);
             _tempfile.print(F("]"));
@@ -226,15 +246,6 @@ int handleRequest(String _in) {
       }
   }
   return succ;
-
-  /*else if (input.substring(0, 2) == "SE") {
-    SPIFFS.begin();
-    File saveout = SPIFFS.open("/temp.txt", "r");
-    while (saveout.peek() != -1)
-    telnetClient.write((uint8_t)saveout.read());
-    saveout.close();
-    SPIFFS.end();
-    }*/
 }
 
 bool isMember(byte _1[], JsonArray & compArr) {
@@ -284,13 +295,11 @@ void sensorsPreview() {
           server.sendContent(F(","));
       }
       server.sendContent(F("</td><td>"));
-
       double testpom = sensors.getTempC(addr);
       if (testpom != -127)
         server.sendContent((String)testpom + (char)176 + "C");
       else
         server.sendContent(F("N/C"));
-
       server.sendContent(F("</td></tr>"));
     }
   }
@@ -322,7 +331,6 @@ bool refreshSensors() {
     JsonArray & devcon = devrefr.parse(devf);
     devf.close();
     if (devcon.success()) {
-      Serial.println(F("sparslem"));
       uint8_t addr[8];
       while (oneWire.search(addr)) {
         if (isMember(addr, devcon)) continue;
@@ -368,69 +376,105 @@ void saveJson(char* _where, JsonArray& _what) {
   return void();
 }
 
+String IPtoString(IPAddress address) {
+  String out;
+  for (int z = 0; z < 4; z++) {
+    out += String(address[z]);
+    if (z < 3)out += ".";
+  }
+  return out;
+}
+
 void devconfig() {
   Serial.println();
+  if (server.arg("action") == "test") {
+    Serial.println(server.uri());
+    for (int x = server.args() - 1; x >= 0; x--) {
+      Serial.print(server.argName(x));
+      Serial.print("=");
+      Serial.println(server.arg(x));
+    }
+    server.sendContent(F("\nHTTP/1.1 303 See Other\r\n"));
+    server.sendContent(F("Location: /settings?site=settings\r\n"));
+
+    /* if (server.arg("selfLOGIN") != "")
+       //strcpy(settings.selfLOGIN, server.arg("selfLOGIN").c_str());
+       if (server.arg("selfPASS") != "")
+         //strcpy(settings.selfPASS, server.arg("selfPASS").c_str());
+         if (server.arg("outSSID") != "")
+           //strcpy(settings.outSSID, server.arg("outSSID").c_str());
+           if (server.arg("outPASS") != "")
+             //strcpy(settings.outPASS, server.arg("outPASS").c_str());
+             if (server.arg("outIP") != "")
+               //strcpy(settings.outIP, server.arg("outIP").c_str());
+               if (server.arg("outGW") != "")
+                 //strcpy(settings.outGW, server.arg("outGW").c_str());
+                 if (server.arg("outMASK") != "")
+                   //strcpy(settings.outMASK, server.arg("outMASK").c_str());
+                   if (server.arg("outDHCP") != "")
+                     //settings.outDHCP = toBool(server.arg("outDHCP"));
+    */
+  } else if (server.arg("action") == "reset") {
+    SPIFFS.begin();
+    //SPIFFS.remove("/set.dat");
+    Serial.println("Remove settings");
+    SPIFFS.end();
+    ESP.restart();
+  }
+
   if (server.method() == HTTP_POST) {
-    if (server.arg("action") == "load" && server.args() == 1) {
+    if (server.arg("action") == "load") {
       server.setContentLength(CONTENT_LENGTH_UNKNOWN);
       StaticJsonBuffer<500> output;
       JsonObject& data = output.createObject();
-      /*data["selfName"] = settings.selfName;
-      data["selfSSID"] = settings.selfSSID;
-      data["selfLOGIN"] = settings.selfLOGIN;
-      data["outSSID"] = settings.outSSID;
-      data["outIP"] = settings.outIP;
-      data["outGW"] = settings.outGW;
-      data["outMASK"] = settings.outMASK;
-      data["outDHCP"] = settings.outDHCP;
-      String resp;
+      data["selfName"] = settings.name();
+      data["selfSSID"] = settings.ssidAP();
+      data["outSSID"] = settings.ssid();
+      data["outIP"] = IPtoString(settings.localIP());
+      data["outGW"] = IPtoString(settings.gatewayIP());
+      data["outMASK"] = IPtoString(settings.subnetMask());
+      data["outDHCP"] = settings.useDHCP();
+      data["login"] = settings.username();
+      String resp = "";
       data.printTo(resp);
       server.sendContent(resp);
       server.sendContent("\x00");
-      data.prettyPrintTo(Serial);*/
-    }
-    if (server.arg("action") == "save") {
+      data.prettyPrintTo(Serial);
+    } else if (server.arg("action") == "save") {
       if (server.arg("selfName") != "")
-        //strcpy(settings.selfName, server.arg("selfName").c_str());
-        if (server.arg("selfLOGIN") != "")
-          //strcpy(settings.selfLOGIN, server.arg("selfLOGIN").c_str());
-          if (server.arg("selfPASS") != "")
-            //strcpy(settings.selfPASS, server.arg("selfPASS").c_str());
-            if (server.arg("outSSID") != "")
-              //strcpy(settings.outSSID, server.arg("outSSID").c_str());
-              if (server.arg("outPASS") != "")
-                //strcpy(settings.outPASS, server.arg("outPASS").c_str());
-                if (server.arg("outIP") != "")
-                  //strcpy(settings.outIP, server.arg("outIP").c_str());
-                  if (server.arg("outGW") != "")
-                    //strcpy(settings.outGW, server.arg("outGW").c_str());
-                    if (server.arg("outMASK") != "")
-                      //strcpy(settings.outMASK, server.arg("outMASK").c_str());
-                      if (server.arg("outDHCP") != "")
-                        //settings.outDHCP = toBool(server.arg("outDHCP"));
-                        SPIFFS.begin();
-      //saveSettings((char*)"/set.dat", settings);
-      SPIFFS.end();
+        settings.name(server.arg("selfName").c_str());
+      if (server.arg("outPASS") != "")
+        yield();
+      if (server.arg("outIP") != "" && server.arg("outGW") != "")
+        if (server.arg("outMASK") != "")
+          settings.configIP(server.arg("outIP").c_str(), \
+                            server.arg("outGW").c_str(), \
+                            server.arg("outGW").c_str());
+      if (server.arg("outDHCP") != "")
+        settings.useDHCP((server.arg("outDHCP")[0] == '1') ? true : false);
+      if (server.hasArg("outSSID"))
+        settings.ssid(server.arg("outSSID").c_str());
+      if (server.arg("selfSSID") != "")
+        settings.ssid(server.arg("selfSSID").c_str());
+
+      //strcpy(settings.outPASS, server.arg("outPASS").c_str());
+
+      //strcpy(settings.outSSID, server.arg("outSSID").c_str());
+      //settings.save("/set.txt");
       server.sendContent(F("\nHTTP/1.1 303 See Other\r\n"));
       server.sendContent(F("Location: /settings\r\n"));
-    }
-    if (server.arg("action") == "test") {
-      Serial.println(server.uri());
-      for (int x = server.args() - 1; x >= 0; x--) {
-        Serial.print(server.argName(x));
-        Serial.print("=");
-        Serial.println(server.arg(x));
-      }
-      server.sendContent(F("\nHTTP/1.1 303 See Other\r\n"));
-      server.sendContent(F("Location: /settings\r\n"));
-    }
-    if (server.arg("action") == "reset") {
-      SPIFFS.begin();
-      //SPIFFS.remove("/set.dat");
-      Serial.println("Remove settings");
-      SPIFFS.end();
-      ESP.restart();
     }
   } else server.send(200, "text/html", devSetPage);
+
+  //strcpy(settings.selfName, server.arg("selfName").c_str());
+  //if (server.arg("selfLOGIN") != "")
+  //strcpy(settings.selfLOGIN, server.arg("selfLOGIN").c_str());
+  //if (server.arg("selfPASS") != "")
+  //strcpy(settings.selfPASS, server.arg("selfPASS").c_str());
+
 }
 
+bool toBool(String input) {
+  if (input[0] == '1') return true;
+  else return false;
+}
