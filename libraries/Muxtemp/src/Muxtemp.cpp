@@ -5,9 +5,9 @@
 
 #define MUXTEMP_PROBE 0x75
 #define MUXTEMP_SEND 0x78
-#define MUXTEMP_REFRESH 0x81
 #define MUXTEMP_READ 0x84
 #define MUXTEMP_COUNT 0x87
+
 /*
    0x75 - probe sensors
    0x78 - send connected sensors
@@ -23,12 +23,13 @@ Muxtemp::Muxtemp(TwoWire &_Wire) {
 Muxtemp::~Muxtemp() {
 }
 
-bool Muxtemp::begin(uint8_t _addr) {
+byte Muxtemp::begin(uint8_t _addr) {
   this->_addr = _addr;
+  _Wire->beginTransmission(this->_addr);
+  byte _ret = _Wire->endTransmission(true);
   this->_count = _readCount();
   this->_sensors = new uint8_t[this->_count];
-  _Wire->beginTransmission(this->_addr);
-  return !(_Wire->endTransmission());
+  return _ret;
 }
 
 uint8_t Muxtemp::_readCount() {
@@ -45,16 +46,9 @@ uint8_t Muxtemp::getCount() {
   return this->_count;
 }
 
-void Muxtemp::probePorts() {
+void Muxtemp::refreshPorts() {
   _Wire->beginTransmission(this->_addr);
   _Wire->write(MUXTEMP_PROBE);
-  _Wire->endTransmission();
-  return void();
-}
-
-void Muxtemp::readPorts() {
-  _Wire->beginTransmission(this->_addr);
-  _Wire->write(MUXTEMP_REFRESH);
   _Wire->endTransmission();
   return void();
 }
@@ -75,12 +69,12 @@ float Muxtemp::getTemp(uint8_t _port) {
   return atof(r.c_str());
 }
 
-void Muxtemp::sendPorts() {
+void Muxtemp::getPorts() {
   _Wire->beginTransmission(this->_addr);
   _Wire->write(MUXTEMP_SEND);
   _Wire->endTransmission();
   delay(5);
-  _Wire->requestFrom(this->_addr, 8);
+  _Wire->requestFrom(this->_addr, this->_count);
   delay(5);
   for (int _z = 0; _z < this->_count; _z++) {
     uint8_t _a = Wire.read();

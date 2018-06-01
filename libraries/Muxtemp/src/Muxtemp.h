@@ -2,10 +2,9 @@ class Muxtemp {
   public:
     Muxtemp(TwoWire&);
     ~Muxtemp();
-    bool begin(uint8_t);
-    void probePorts();
-    void sendPorts();
-    void readPorts();
+    byte begin(uint8_t);
+    void refreshPorts();
+    void getPorts();
     float getTemp(uint8_t);
     uint8_t getCount();
     uint8_t typeOf(uint8_t);
