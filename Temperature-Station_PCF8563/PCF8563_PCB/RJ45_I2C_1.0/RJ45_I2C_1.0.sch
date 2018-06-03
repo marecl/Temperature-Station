@@ -41,23 +41,10 @@ Text GLabel 3200 3850 2    50   Input ~ 0
 SCL
 Text GLabel 3200 3750 2    50   Input ~ 0
 SDA
-$Comp
-L Connector_Generic:Conn_01x05 J2
-U 1 1 5ADE7775
-P 5150 3400
-F 0 "J2" H 5230 3442 50  0000 L CNN
-F 1 "Out" H 5230 3351 50  0000 L CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical" H 5150 3400 50  0001 C CNN
-F 3 "~" H 5150 3400 50  0001 C CNN
-	1    5150 3400
-	1    0    0    -1  
-$EndComp
 Text GLabel 4950 3500 0    50   Input ~ 0
 SDA
 Text GLabel 4950 3400 0    50   Input ~ 0
 SCL
-Text GLabel 4950 3600 0    50   Input ~ 0
-1wire
 Text GLabel 4950 3300 0    50   Input ~ 0
 3V3
 $Comp
@@ -116,8 +103,6 @@ F 3 "~" H 3350 4050 50  0001 C CNN
 $EndComp
 Wire Wire Line
 	4650 3200 4950 3200
-Text GLabel 3200 3650 2    50   Input ~ 0
-1wire
 $Comp
 L Connector_Generic:Conn_01x12 J1
 U 1 1 5B0AE8BD
@@ -191,6 +176,43 @@ F 1 "ATmega328-PU" H 1659 3605 50  0000 R CNN
 F 2 "Package_DIP:DIP-28_W7.62mm" H 2600 3650 50  0001 C CIN
 F 3 "http://ww1.microchip.com/downloads/en/DeviceDoc/atmel-8271-8-bit-avr-microcontroller-atmega48a-48pa-88a-88pa-168a-168pa-328-328p_datasheet.pdf" H 2600 3650 50  0001 C CNN
 	1    2600 3650
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:Jumper_NO_Small JP1
+U 1 1 5B11B726
+P 3300 3650
+F 0 "JP1" H 3450 3850 50  0000 C CNN
+F 1 "bypass1Wire" H 3450 3750 50  0000 C CNN
+F 2 "Resistor_SMD:R_0805_2012Metric_Pad1.15x1.50mm_HandSolder" H 3300 3650 50  0001 C CNN
+F 3 "~" H 3300 3650 50  0001 C CNN
+	1    3300 3650
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR0101
+U 1 1 5B11B9A1
+P 3600 3650
+F 0 "#PWR0101" H 3600 3400 50  0001 C CNN
+F 1 "GND" H 3605 3477 50  0000 C CNN
+F 2 "" H 3600 3650 50  0001 C CNN
+F 3 "" H 3600 3650 50  0001 C CNN
+	1    3600 3650
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	3400 3650 3600 3650
+Text GLabel 4950 3600 0    50   Input ~ 0
+1wire
+$Comp
+L Connector_Generic:Conn_01x05 J2
+U 1 1 5ADE7775
+P 5150 3400
+F 0 "J2" H 5230 3442 50  0000 L CNN
+F 1 "Out" H 5230 3351 50  0000 L CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical" H 5150 3400 50  0001 C CNN
+F 3 "~" H 5150 3400 50  0001 C CNN
+	1    5150 3400
 	1    0    0    -1  
 $EndComp
 $EndSCHEMATC

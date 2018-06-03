@@ -1,7 +1,9 @@
-Muxtemp			KEYWORD1
-begin			KEYWORD2
+Muxtemp	KEYWORD1
+begin	KEYWORD2
 refreshPorts	KEYWORD2
-getPorts		KEYWORD2
-getTemp			KEYWORD2
-getCount		KEYWORD2
-typeOf			KEYWORD2
+getPorts	KEYWORD2
+getTemp	KEYWORD2
+getCount	KEYWORD2
+typeOf	KEYWORD2   
+getAddress	KEYWORD2
+bypass1Wire	KEYWORD2

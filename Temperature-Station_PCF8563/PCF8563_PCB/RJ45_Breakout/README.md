@@ -1,0 +1,1 @@
+Breakout board with RJ45 sockets to connect various types of sensors.
