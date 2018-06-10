@@ -13,8 +13,8 @@ class Muxtemp {
 
   private:
     TwoWire *_Wire;
-    uint8_t _addr;
-    uint8_t _count;
+    int8_t _addr;
+    int8_t _count;
     uint8_t _readCount();
     uint8_t *_sensors;
 };

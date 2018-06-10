@@ -376,8 +376,8 @@ F 3 "~" H 8450 5400 50  0001 C CNN
 	1    8450 5400
 	-1   0    0    1   
 $EndComp
-Text Notes 7950 5700 0    50   ~ 0
-TX -> RX\nRX -> TX\nDTR\nRTS\nGND
+Text Notes 7950 5600 0    50   ~ 0
+GND\nTX -> RX\nRX -> TX\nRTS\nDTR
 Text GLabel 3350 3350 0    50   Input ~ 0
 RX
 Text GLabel 3350 3250 0    50   Input ~ 0

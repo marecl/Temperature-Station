@@ -11,6 +11,10 @@
    Use Arduino Pro Mini 3V3 bootloader and internal 8MHz clock
    Change BOD detection to 1.8V (2.8V if you're not experiencing resets)
 
+   ToDo: 1wire jumpers (global rail interferes with searching)
+   When bypassing - add jumpers
+   No bypass - every 1wire device with separate circuit!
+
    0x75 - probe sensors
    0x78 - send connected sensors
    0x81[N] - sensor address from port N (only when 1wire bypass is not used!)
@@ -20,54 +24,62 @@
 */
 
 /* Pins, temperatures, saved ports */
+const uint8_t address = 0x10;
 const uint8_t _pins[N_PORTS] = {5, 6, 7, 8, 9, 10, 11, 12};
-double _temps[N_PORTS];  //Readings
-uint8_t _ports[N_PORTS]; //Socket status
-uint8_t _addr[N_PORTS][8]; //1wire address
-uint8_t* strtemp = new uint8_t[(N_PORTS < 8) ? 8 : N_PORTS];
-uint8_t command, reqport; //Command and requested port
+static double _temps[N_PORTS];  //Readings
+static uint8_t _ports[N_PORTS]; //Socket status
+static uint8_t _addr[N_PORTS][8]; //1wire address
+static uint8_t* strtemp = new uint8_t[(N_PORTS < 8) ? 8 : N_PORTS];
+volatile uint8_t command, reqport; //Command and requested port
 bool bypass1Wire = false; //Should it avoid using 1wire
 uint8_t toSend = 0; //Part of NULL solution
 
 /*
     0 - no
-    1 - connected to port (probably 1wire)
-    5 - 1wire (if not bypassed)
+    1 - not recognized
+    5 - 1wire
     11/21/22 - DHT
-    255 - unknown
-
-    DS18B20 can have NULLs in address so printing directly dosent work
 */
 
 void setup() {
-  //If master does support 1wire interface the device will not use it
-  //But if this pin is shorted to ground - slave will treat it as its own device
+  /*
+    For this option to work:
+      No bypass: cut all 1wire jumpers out from connectors, solder A3 jumper
+      Bypass: Connect all jumpers, desolder A3 jumper
+  */
   pinMode(A3, INPUT_PULLUP);
   if (digitalRead(A3))
     bypass1Wire = true;
 
-  Wire.begin(0x10);
-  Wire.onRequest(requestEvent);
-  Wire.onReceive(receiveEvent);
-
-//Quick look if it's reading sensors correctly
+  //Quick look if it's reading sensors correctly
 #ifdef DEBUG
   Serial.begin(115200);
+  Serial.println(F("\r\nI2C Expander Debug"));
+  Serial.print(F("Address: 0x"));
+  Serial.println(address, HEX);
+  Serial.print(F("Ports: "));
+  Serial.println(N_PORTS);
+  Serial.print(F("1wire bypass: "));
+  Serial.println(bypass1Wire ? F("Yes") : F("No"));
   refreshPorts();
-  for (int z = 0; z < 8; z++) {
+  for (int z = 0; z < N_PORTS; z++) {
     Serial.print(z);
-    Serial.print(" (");
+    Serial.print(F(" ("));
     Serial.print(_ports[z]);
-    Serial.print(") ");
+    Serial.print(F(") "));
     Serial.print(_temps[z]);
-    Serial.print(" (");
+    Serial.print(F(" ("));
     for (int q = 0; q < 8; q++) {
       Serial.print(_addr[z][q]);
-      if (q == 7) Serial.print(")\r\n");
-      else Serial.print(",");
+      if (q == 7) Serial.print(F(")\r\n"));
+      else Serial.print(F(","));
     }
   }
 #endif
+
+  Wire.begin(address);
+  Wire.onRequest(requestEvent);
+  Wire.onReceive(receiveEvent);
 }
 
 void loop() {
@@ -76,17 +88,23 @@ void loop() {
       case 0x75: refreshPorts(); break;
       case 0x78: for (int b = 0; b < N_PORTS; b++)
           strtemp[b] = _ports[b];
-        strtemp[N_PORTS] = 0x00;
         toSend = N_PORTS;
         break;
       case 0x81: if (!bypass1Wire) {
-          for (uint8_t _a = 0; _a < 8; _a++)
+          for (uint8_t _a = 0; _a < 8; _a++) {
             strtemp[_a] = _addr[reqport][_a];
-          strtemp[8] = 0x00;
+#ifdef DEBUG
+            Serial.print(strtemp[_a], DEC);
+            Serial.print('|');
+            Serial.print(_addr[reqport][_a]);
+            if (_a != 7) Serial.print(" ");
+            else Serial.println();
+#endif
+          }
           toSend = 8;
         } break;
-      case 0x84: strcpy(strtemp, String(_temps[reqport]).c_str());
-        toSend = strlen(strtemp); break;
+      case 0x84: strcpy((char*)strtemp, String(_temps[reqport]).c_str());
+        toSend = strlen((char*)strtemp); break;
       case 0x87: strtemp[0] = N_PORTS;
         toSend = 1;
         break;
@@ -104,10 +122,13 @@ void requestEvent() {
   return void();
 }
 
-void receiveEvent(int numBytes) { //Receive type of data
-  command = Wire.read();
-  if (command == 0x84 || command == 0x81) //If there is command - read argument
+void receiveEvent(int numBytes) {
+  if (numBytes == 1)
+    command = Wire.read();
+  else if (numBytes == 2) {
+    command = Wire.read();
     reqport = Wire.read();
+  }
   return void();
 }
 
@@ -121,23 +142,22 @@ void refreshPorts() { //Detect if ports are used
     if (!digitalRead(_pins[a])) {
       _ports[a] = 0; //NOT connected
       _temps[a] = -127.00;
+      for (uint8_t _a = 0; _a < 8; _a++)
+        _addr[a][_a] = 0;
       continue;
     } else _ports[a] = 1; //Connected, not yet recognized
 
-    if (bypass1Wire == false) {
-      byte _t[8];
+    if (!bypass1Wire) {
+      byte _s[8];
       OneWire oneWire(_pins[a]);
       DallasTemperature sensors(&oneWire);
-      if (oneWire.search(_t) && OneWire::crc8( _t, 7) == _t[7]) {
+      if (oneWire.search(_s) && OneWire::crc8( _s, 7) == _s[7]) {
         sensors.requestTemperatures();
-        _temps[a] = sensors.getTempC(_t);
+        _temps[a] = sensors.getTempC(_s);
         for (uint8_t _a = 0; _a < 8; _a++)
-          _addr[a][_a] = _t[_a];
+          _addr[a][_a] = _s[_a];
         _ports[a] = 5;
-      } else {
-        for (uint8_t _a = 0; _a < 8; _a++)
-          _addr[a][_a] = 0;
-        _ports[a] = 255;
+        continue;
       }
     }
 

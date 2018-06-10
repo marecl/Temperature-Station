@@ -54,32 +54,31 @@ void Muxtemp::refreshPorts() {
   return void();
 }
 
-float Muxtemp::getTemp(uint8_t _port) {
+float Muxtemp::getTemp(uint8_t _p) {
   _Wire->beginTransmission(this->_addr);
   _Wire->write(MUXTEMP_READ);
-  _Wire->write(_port);
+  _Wire->write(_p);
   _Wire->endTransmission();
-  delay(5);
-  _Wire->requestFrom(this->_addr, 7);
-  delay(5);
+  delayMicroseconds(175);
+  _Wire->requestFrom(this->_addr, 8);
   String r = "";
-  while (_Wire->available()) {
+  for (uint8_t z = 0; z <= 8; z++) {
     char t = _Wire->read();
-    if (t != 0 && t != 255)r += t;
+    if (t == 255) continue;
+    else r += t;
   }
   return atof(r.c_str());
 }
 
 void Muxtemp::getPorts() {
+  uint8_t _a = 0;
   _Wire->beginTransmission(this->_addr);
   _Wire->write(MUXTEMP_SEND);
   _Wire->endTransmission();
-  delay(5);
   _Wire->requestFrom(this->_addr, this->_count);
-  delay(5);
   for (uint8_t _z = 0; _z < this->_count; _z++) {
-    uint8_t _a = Wire.read();
-    if (_a != 0 && _a != 255)
+    _a = Wire.read();
+    if (_a != 255)
       this->_sensors[_z] = _a;
   }
   return void();
@@ -89,26 +88,24 @@ uint8_t Muxtemp::typeOf(uint8_t _p) {
   return this->_sensors[_p];
 }
 
-uint8_t* Muxtemp::getAddress(uint8_t _p) {
-  static uint8_t _addr[8];
+uint8_t *Muxtemp::getAddress(uint8_t _p) {
+  uint8_t _a[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  uint8_t *_aptr;
   _Wire->beginTransmission(this->_addr);
   _Wire->write(MUXTEMP_ADDR);
   _Wire->write(_p);
   _Wire->endTransmission();
-  delay(5);
   _Wire->requestFrom(this->_addr, 8);
-  delay(5);
   for (uint8_t s = 0; s < 8; s++)
-    _addr[s] = _Wire->read();
-  return _addr;
+    _a[s] = _Wire->read();
+  _aptr = _a;
+  return _aptr;
 }
 
 bool Muxtemp::bypass1Wire() {
   _Wire->beginTransmission(this->_addr);
   _Wire->write(MUXTEMP_BYPASS);
   _Wire->endTransmission();
-  delay(5);
   _Wire->requestFrom(this->_addr, 1);
-  delay(5);
   return Wire.read() == 1 ? true : false;
 }

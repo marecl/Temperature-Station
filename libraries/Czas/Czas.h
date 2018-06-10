@@ -20,7 +20,7 @@ const uint8_t daysInMonth [] PROGMEM = { 31, 28, 31, 30, 31, 30,
 
 class Czas { //PCF8563
   public:
-    Czas(byte sda_pin, byte scl_pin);
+    Czas(TwoWire&);
     ~Czas();
     int second();
     int minute();
@@ -30,15 +30,16 @@ class Czas { //PCF8563
     int year();
     int dow(); //Day of week
     void readRTC();
-    void setRTC(uint32_t t);
-    void setRTC(uint8_t ss, uint8_t mm, uint8_t hh, uint16_t d, uint8_t dt, uint8_t m, uint8_t r);
-    uint32_t dateToEpoch(uint8_t ss, uint8_t mm, uint8_t hh, uint16_t d, uint8_t m, uint8_t r);
-	uint32_t dateAsEpoch();
-    uint32_t epochToDate(uint8_t ss, uint8_t mm, uint8_t hh, uint16_t d, uint8_t dt, uint8_t m, uint8_t r);
-    bool compareTimeEpoch(uint32_t t, int tolerance); //I'm too lazy to convert date to epoch
+    void setRTC(uint32_t);
+    void setRTC(uint8_t, uint8_t, uint8_t, uint16_t, uint8_t, uint8_t, uint16_t);
+    uint32_t dateToEpoch(uint8_t, uint8_t, uint8_t, uint16_t, uint8_t, uint8_t);
+    uint32_t dateAsEpoch();
+    uint32_t epochToDate(uint8_t, uint8_t, uint8_t, uint16_t, uint8_t, uint8_t, uint8_t);
+    bool compareTimeEpoch(uint32_t, int); //I'm too lazy to convert date to epoch
   private:
-    byte bcdToDec(byte value);
-    byte decToBcd(byte value);
+    TwoWire *_Wire;
+    byte bcdToDec(byte);
+    byte decToBcd(byte);
     int _second;
     int _minute;
     int _hour;
@@ -47,5 +48,4 @@ class Czas { //PCF8563
     int _year;
     int _dow; //Day of week
 };
-
 #endif

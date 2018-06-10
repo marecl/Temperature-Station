@@ -1,9 +1,10 @@
-/*#define SD_D D0 //GPIO16
+/*
+  #define SD_D D0 //GPIO16
   #define SDA D1 //GPIO5
   #define SCL D2 //GPIO4
   #define OW_PORT D3 //GPIO0
-  #define SD_CS D4 //GPIO2*/
-
+  #define SD_CS D4 //GPIO2
+*/
 
 #define SD_D A0
 #define SDA 5
@@ -13,13 +14,11 @@
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
-bool isMember(byte _1[], JsonArray & compArr);
-int isMember(JsonArray & locArr, JsonObject & remObj);
-String addrToString(uint8_t _addr[8]);
-String addrToString(JsonArray& _addr);
-
-const char setsFile[] PROGMEM = "/set.dat";
-const char sensFile[] PROGMEM = "/sensors.txt";
+int isMember(byte, JsonArray&);
+int isMember(JsonArray&, JsonObject&);
+int isMember(int, JsonArray&);
+String addrToString(uint8_t[8]);
+String addrToString(JsonArray&);
 
 static const uint8_t x509[] PROGMEM = {
 #include "x509.h"
@@ -28,33 +27,18 @@ static const uint8_t rsakey[] PROGMEM = {
 #include "key.h"
 };
 
-void bootFailHandler(int _code) {
-  switch (_code) {
-    default: return;
-      break;
-    case 1: Serial.println(F("No sensors file!"));
-      break;
-    case 2: Serial.println(F("SD Card detected but cannot be initialized!"));
-      break;
-    case 3: Serial.print(F("No card inserted\n"));
-      break;
-    case 4: Serial.print(F("Could not connect to WiFi!\nLog mode only\n"));
-      break;
-  }
-}
-
-bool isMember(byte _1[], JsonArray & compArr) {
+int isMember(byte _1[], JsonArray& compArr) {
   for (uint8_t a = 0; a < compArr.size(); a++) {
     for (uint8_t b = 0; b < 8; b++) {
       if (_1[b] != compArr[a]["a"][b].as<byte>())
         break;
-      else if (b == 7) return true;
+      else if (b == 7) return a;
     }
   }
-  return false;
+  return -1;
 }
 
-int isMember(JsonArray & locArr, JsonObject & remObj) {
+int isMember(JsonArray& locArr, JsonObject& remObj) {
   for (uint8_t locsiz = 0; locsiz < locArr.size(); locsiz++) {
     for (uint8_t a = 0; a < 8; a++) {
       if (locArr[locsiz]["a"][a].as<byte>() != remObj["a"][a].as<byte>())
@@ -65,6 +49,15 @@ int isMember(JsonArray & locArr, JsonObject & remObj) {
   return -1;
 }
 
+int isMember(int locAddr, JsonArray& remArr) {
+  for (uint8_t remSiz = 0; remSiz < remArr.size(); remSiz++) {
+    if (remArr[remSiz]["a"].is<int>() == false) continue;
+    if (locAddr != remArr[remSiz]["a"].as<int>())
+      continue;
+    else return remSiz;
+  }
+  return -1;
+}
 
 String addrToString(uint8_t _addr[8]) {
   String out = "";
@@ -80,10 +73,8 @@ String addrToString(JsonArray& _addr) {
   return out;
 }
 
-void saveJson(JsonObject & toSave) {
-  if (SD.exists(FPSTR(sensFile)))
-    SD.remove(FPSTR(sensFile));
-  File root = SD.open(FPSTR(sensFile), FILE_WRITE);
+void saveJson(JsonObject & toSave, const char* _f) {
+  File root = SD.open(_f, FILE_WRITE);
   toSave.prettyPrintTo(root);
   root.flush();
   root.close();
@@ -128,6 +119,56 @@ String IPtoString(IPAddress address) {
 }
 
 bool toBool(String input) {
-  if (input[0] == '1') return true;
-  else return false;
+  if (input == "") return false;
+  else if (input[0] == '0') return false;
+  else return true;
+}
+
+void refreshSensors(Muxtemp* _s, const char* _n) {
+  DynamicJsonBuffer jsonBuffer(2250);
+  File root = SD.open(_n, FILE_READ);
+  JsonObject& nSet = jsonBuffer.parseObject(root);
+  root.close();
+
+  JsonArray& _saved = nSet["saved"];
+  _s->getPorts();
+
+  for (int a = 0; a < _s->getCount(); a++) {
+    int pos;
+    switch (_s->typeOf(a)) {
+      case 0:
+        nSet["local"][a] = -1;
+        continue; break;
+      case 11:
+      case 21:
+      case 22:
+        pos = isMember(a, _saved);
+        if (pos != -1) nSet["local"][a] = pos;
+        else {
+          JsonObject& _new = _saved.createNestedObject();
+          switch (_s->typeOf(a)) {
+            case 11: _new["n"] = "Unknown_DHT11"; break;
+            case 21: _new["n"] = "Unknown_DHT21"; break;
+            case 22: _new["n"] = "Unknown_DHT22"; break;
+          }
+          _new["a"] = a;
+          a--;
+        }
+        continue; break;
+      case 5:
+        uint8_t q[8];
+        uint8_t *_q = _s->getAddress(a);
+        for (int z = 0; z < 8; z++) q[z] = *(_q + z);
+        pos = isMember(q, _saved);
+        if (pos == -1) {
+          JsonObject& _new = _saved.createNestedObject();
+          _new["n"] = addrToString(q);
+          JsonArray& _ad = _new.createNestedArray("a");
+          for (uint8_t y = 0; y < 8; y++) _ad.add(q[y]);
+          a--;
+          continue;
+        } else nSet["local"][a] = pos;
+    }
+  }
+  saveJson(nSet, _n);
 }

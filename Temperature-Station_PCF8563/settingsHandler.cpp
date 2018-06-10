@@ -20,22 +20,13 @@ settingsHandler::settingsHandler() {
   this->useNTP = false;
   this->lastUpdate = 0;
   this->timezone = 0;
-
-  this->setField(this->_user, "admin", 16);
-  this->setField(this->_pwd, "admin", 16);
-
-  String _n = "TemperatureStation";
-  this->setField(this->_name, _n.c_str(), 32);
-  this->setField(this->_passap, _n.c_str(), 32);
-  _n += String(ESP.getChipId());
-  this->setField(this->_ssidap, _n.c_str(), 32);
 }
 
 settingsHandler::~settingsHandler() {
 
 }
 
-char* settingsHandler::ntpServer() {
+const char* settingsHandler::ntpServer() {
   return this->_ntp;
 }
 
@@ -84,21 +75,20 @@ void settingsHandler::save(const char* _filename) {
   return void();
 }
 
-bool settingsHandler::load(const char* _filename) {
+bool settingsHandler::load(const char* _f) {
   SPIFFS.begin();
-  if (!SPIFFS.exists("/set.txt")) {
+  if (!SPIFFS.exists(_f)) {
     SPIFFS.end();
     return false;
   }
-  File _toSave = SPIFFS.open(_filename, "r");
+  File _toSave = SPIFFS.open(_f, "r");
   DynamicJsonBuffer _ld(JSON_OBJECT_SIZE(11) + 230);
   JsonObject& _data = _ld.parseObject(_toSave);
   _toSave.close();
   SPIFFS.end();
   if (!_data.success()) return false;
-  _data.printTo(*_debug);
+  _data.printTo(*(this->_debug));
 
-  this->_dhcp = _data["DHCP"].as<bool>();
   this->setField(this->_name, _data["NAME"], 32);
   this->setField(this->_ssid, _data["SSID"], 32);
   this->setField(this->_pass, _data["PASS"], 32);
@@ -106,35 +96,38 @@ bool settingsHandler::load(const char* _filename) {
   this->setField(this->_passap, _data["AP_PASS"], 32);
   this->setField(this->_user, _data["USR"], 16);
   this->setField(this->_pwd, _data["USR_PASS"], 16);
+  this->setField(this->_ntp, _data["ntpServer"], 32);
   this->_ip = stringToIP(_data["IP"]);
   this->_gw = stringToIP(_data["GW"]);
   this->_mask = stringToIP(_data["MASK"]);
+  this->_dhcp = _data["DHCP"].as<bool>();
   this->useNTP = _data["useNTP"].as<bool>();
-  this->setField(this->_ntp, _data["ntpServer"], 32);
-  this->lastUpdate, _data["lastUpdate"].as<uint32_t>();
-  this->timezone, _data["tz"].as<short int>();
-
+  this->lastUpdate = _data["lastUpdate"].as<uint32_t>();
+  this->timezone = _data["tz"].as<short int>();
   return true;
 }
-
 
 void settingsHandler::serialDebug(HardwareSerial *_debug) {
   this->_debug = _debug;
   return void();
 }
 
-bool settingsHandler::reset(const char* _l, const char* _p) {
+bool settingsHandler::reset(const char* _l, const char* _p, const char* _f) {
   if (this->authenticate(_l, _p) == false) return false;
   _debug->println("Removing config");
   SPIFFS.begin();
-  SPIFFS.remove("/set.txt");
+  SPIFFS.remove(_f);
   SPIFFS.end();
   return true;
 }
 
-void settingsHandler::configUpdateServer(ESP8266WebServer *_conf, ESP8266HTTPUpdateServer *_upd) {
-  _upd->setup(_conf, "/update", this->_user, this->_pwd);
+void settingsHandler::configUpdateServer(ESP8266WebServer *_conf, ESP8266HTTPUpdateServer *_upd, const char* _url) {
+  _upd->setup(_conf, _url, this->_user, this->_pwd);
   return void();
+}
+
+bool settingsHandler::webAuthenticate(ESP8266WebServer* _s) {
+  return _s->authenticate(this->_user, this->_pwd);
 }
 
 bool settingsHandler::beginWiFi() {
@@ -163,13 +156,9 @@ bool settingsHandler::beginAP() {
   return WiFi.softAP(this->_ssidap, this->_passap, false);
 }
 
-void settingsHandler::setPassword(const char* _password) {
-  this->setField(this->_pwd, _password, 16);
-  return void();
-}
-
-void settingsHandler::setUsername(const char* _username) {
-  this->setField(this->_user, _username, 16);
+void settingsHandler::configUser(const char* _u, const char* _p) {
+  this->setField(this->_user, _u, 16);
+  this->setField(this->_pwd, _p, 16);
   return void();
 }
 
@@ -252,19 +241,19 @@ void settingsHandler::ssidAP(const char* _ssidap) {
   return void();
 }
 
-char* settingsHandler::ssid() {
+const char* settingsHandler::ssid() {
   return this->_ssid;
 }
 
-char* settingsHandler::ssidAP() {
+const char* settingsHandler::ssidAP() {
   return this->_ssidap;
 }
 
-char* settingsHandler::username() {
+const char* settingsHandler::username() {
   return this->_user;
 }
 
-char* settingsHandler::name() {
+const char* settingsHandler::name() {
   return this->_name;
 }
 
