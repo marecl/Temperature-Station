@@ -89,8 +89,7 @@ uint8_t Muxtemp::typeOf(uint8_t _p) {
 }
 
 uint8_t *Muxtemp::getAddress(uint8_t _p) {
-  uint8_t _a[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-  uint8_t *_aptr;
+  uint8_t *_a = new uint8_t[8];
   _Wire->beginTransmission(this->_addr);
   _Wire->write(MUXTEMP_ADDR);
   _Wire->write(_p);
@@ -98,8 +97,7 @@ uint8_t *Muxtemp::getAddress(uint8_t _p) {
   _Wire->requestFrom(this->_addr, 8);
   for (uint8_t s = 0; s < 8; s++)
     _a[s] = _Wire->read();
-  _aptr = _a;
-  return _aptr;
+  return _a;
 }
 
 bool Muxtemp::bypass1Wire() {

@@ -17,22 +17,26 @@
 #define DEFAULT_TIMEOUT 1000
 #include "FS.h"
 #include "defs.h"
-//#define HTTP_LOGIN String(settings.selfLOGIN).c_str()
-//#define HTTP_PASS String(settings.selfPASS).c_str()
-//Remake to decrypt from file
 
 /*
+  curl -F "image=@Temperature-Station_PCF8563.ino.nodemcu.bin" -u admin:admin 192.168.2.98/update
+
   Pinger 1.0.0
   LwIP v2 Higher Bandwidth
   You need to generate x509 key using script somewhere in ESP examples
   When setting time - use GMT+0 time without DST  (DST will be automatic)
 
   ToDO:
+    Remake /sensors button to sync 1wire with all devices
+    Select if 1wire can override port name
+    Select if master can overwrite slave settings
+    Add backup options
     Automatic DST
     Secure connection with slave but dosen't need to be
     Move index to be hard-coded
     SET: require authentication, confirm password to change it or username
     Finish backend
+    Encrypt passwords
 */
 #define MAX_SENSORS 16
 
@@ -48,6 +52,8 @@ WiFiUDP udp;
 ESP8266HTTPUpdateServer updServer;
 
 WiFiClient telnet;
+WiFiClient debugClient;
+WiFiServer debugServer(23);
 
 Czas zegar(Wire);
 Muxtemp ext(Wire);
@@ -68,30 +74,31 @@ void setup() {
   Serial.println(F("Temperature Station"));
   Serial.setDebugOutput(false);
   WiFi.persistent(false);
-  
-  /*IPAddress ip(192, 168, 2, 98);
-    IPAddress gateway(192, 168, 2, 1);
-    IPAddress subnet(255, 255, 255, 0);
-    settings.configAP("TemperatureStation", "TemperatureStation");
-    settings.useDHCP(false);
-    settings.name("TemperatureStation");
-    settings.configIP(ip, gateway, subnet);
-    settings.ntpServer("tempus1.gum.gov.pl");
-    settings.configUser("admin", "admin");
-    settings.timezone = 1;
-    settings.useNTP = true;
-    Serial.println("Saving");
-    settings.save("/set.txt");*/
 
+  ///////////////////////////////
+  IPAddress ip(192, 168, 2, 98);
+  IPAddress gateway(192, 168, 2, 1);
+  IPAddress subnet(255, 255, 255, 0);
+  settings.configAP("TemperatureStation", "TemperatureStation");
+  settings.useDHCP(false);
+  settings.name("TemperatureStation");
+  settings.configIP(ip, gateway, subnet);
+  settings.ntpServer("tempus1.gum.gov.pl");
+  settings.configUser("admin", "admin");
+  settings.timezone = 1;
+  settings.useNTP = true;
+  Serial.println("Saving");
+  settings.save("/set.txt");
+  ///////////////////////////////
 
-  Serial.print("Loading...");
+  Serial.print(F("Loading... "));
   settings.serialDebug(&Serial);
   if (!settings.load("/set.txt")) { //Defaults
-    Serial.println(F(" Fail"));
+    Serial.println(F("Fail"));
     settings.configUser("admin", "admin");
     settings.name("TemperatureStation");
     settings.configAP(("TemperatureStation" + (String)ESP.getChipId()).c_str(), "TemperatureStation");
-  } else Serial.println(F(" OK"));
+  } else Serial.println(F("OK"));
 
   bool gotwifi = false;
   if (strcmp(settings.ssid(), "") != 0) {
@@ -114,7 +121,6 @@ void setup() {
     Serial.print(F("Connect to:\t"));
     Serial.println(settings.ssidAP());
   }
-
   Serial.print(F("\r\nMuxtemp:\t"));
   Serial.println((ext.begin(0x10) == 0) ? F("Present") : F("Error"));
   Serial.print(F("Ports:  \t"));
@@ -128,7 +134,7 @@ void setup() {
   if (analogRead(SD_D) < 512) {
     if (SD.begin(SD_CS)) {
       Serial.println(F("SD Card initialized"));
-      if (!SD.exists("SENSORS.TXT"))
+      if (!SD.exists("/SENSORS.TXT"))
         Serial.println(F("No sensors file!"));
     } else Serial.println(F("SD Card detected but cannot be initialized!"));
   } else Serial.print(F("No card inserted\n"));
@@ -137,6 +143,7 @@ void setup() {
   //server.setServerKeyAndCert_P(rsakey, sizeof(rsakey), x509, sizeof(x509));
   server.on("/settings", devconfig);
   server.on("/sensors", sensorSettings);
+  server.on("/sensorsbdc", sensorBroadcast);
   server.on("/time", HTTP_POST, timeset);
   server.on("/list", HTTP_GET, printDirectory);
   server.on("/sysinfo", HTTP_GET, httpinfo);
@@ -147,12 +154,15 @@ void setup() {
   }, handleFileUpload);
   server.onNotFound(handleNotFound);
   server.begin();
-  Serial.println(F("HTTP server: \tStarted"));
-  //This has got no sense since begin is void, not bool
+  Serial.println(F("HTTP server:\tStarted"));
+  debugServer.begin();
+  //This has no sense
   //But still it looks good while booting :)
 
+  //Emergency connection - update or something
+  //In case when dosen't detect SDcard, wrong config etc
+
   udp.begin(2390);
-  delay(1000);
   zegar.readRTC();
   if (settings.useNTP && gotwifi) {
     Serial.print(F("NTP server:\t"));
@@ -174,64 +184,37 @@ void setup() {
   if (zegar.dateAsEpoch() < 59) zegar.setRTC(settings.lastUpdate);
   Serial.println(printDateTime(zegar));
 
+  while (millis() < (nextAvailable - 5000))
+    server.handleClient();
+
+  refreshSensors(&ext, "/SENSORS.TXT");
+  nextAvailable = millis() + minDelay;
+
   DynamicJsonBuffer jsonBuffer(2250);
-  File root = SD.open("SENSORS.TXT", FILE_READ);
+  File root = SD.open("/SENSORS.TXT", FILE_READ);
   JsonObject& nSet = jsonBuffer.parseObject(root);
   root.close();
 
   JsonArray& _saved = nSet["saved"];
-  ext.getPorts();
-
-  for (int a = 0; a < ext.getCount(); a++) {
-    int pos;
-    switch (ext.typeOf(a)) {
-      case 0:
-        nSet["local"][a] = -1;
-        continue; break;
-      case 11:
-      case 21:
-      case 22:
-        pos = isMember(a, _saved);
-        if (pos != -1) nSet["local"][a] = pos;
-        else {
-          JsonObject& _new = _saved.createNestedObject();
-          switch (ext.typeOf(a)) {
-            case 11: _new["n"] = "Unknown_DHT11"; break;
-            case 21: _new["n"] = "Unknown_DHT21"; break;
-            case 22: _new["n"] = "Unknown_DHT22"; break;
-          }
-          _new["a"] = a;
-          a--;
-        }
-        continue; break;
-      case 5:
-        uint8_t q[8];
-        uint8_t *_q = ext.getAddress(a);
-        for (int z = 0; z < 8; z++) q[z] = *(_q + z);
-        pos = isMember(q, _saved);
-        if (pos == -1) {
-          JsonObject& _new = _saved.createNestedObject();
-          _new["n"] = addrToString(q);
-          JsonArray& _ad = _new.createNestedArray("a");
-          for (uint8_t y = 0; y < 8; y++) _ad.add(q[y]);
-          a--;
-          continue;
-        } else nSet["local"][a] = pos;
-    }
-  }
-  nSet.printTo(Serial);
-  saveJson(nSet, "SENSORS.TXT");
-
   Serial.println(F("\r\nLocal:"));
   for (int a = 0; a < ext.getCount(); a++) {
-    int pos = nSet["local"][a].as<int>();
+    uint8_t _type = ext.typeOf(a);
+    JsonObject& _curr = nSet["local"][a];
+
     Serial.print('\t' + (String)(a + 1) + "/" + (String)(ext.getCount()) + ": ");
-    if (ext.typeOf(a) == 0) Serial.print(F("N/C"));
-    else Serial.print(_saved[pos]["n"].as<const char*>());
-    if (ext.typeOf(a) == 5) {
+    Serial.print('\t' + String(ext.typeOf(a)) + '\t');
+    if (_type == 0) Serial.print(F("N/C"));
+    else if (_type != 5) {
+      Serial.println(_curr["n"].as<const char*>());
+      continue;
+    } else if (_type == 5) {
+      uint8_t *_q = ext.getAddress(a);
+      int pos = isMember(_q, _saved, 8);
+      Serial.print(_saved[pos]["n"].as<const char*>());
       Serial.print(F("\t("));
+
       for (uint8_t y = 0; y < 8; y++) {
-        Serial.print(_saved[pos]["a"][y].as<byte>());
+        Serial.print(*(_q + y));
         if (y < 7) Serial.print(",");
         else Serial.print(')');
       }
@@ -239,28 +222,47 @@ void setup() {
     Serial.println();
   }
 
-  /*
-      //Refreshing slaves config
-      uint8_t rtd = 0;
-      while (rtd < nSet["remote"].size() && gotwifi) {
-      JsonArray& locdata = nSet["remote"][rtd]["loc"];
-      int32_t pingresp = Pinger::Ping(locdata[1].as<const char*>());
-      if (pingresp <= 0) {
+  for (uint8_t rtd = 0; rtd < nSet["remote"].size(); rtd++) {
+    JsonArray& _target = nSet["remote"][rtd];
+    int32_t pingresp = Pinger::Ping(_target[1].as<const char*>());
+    if (pingresp <= 0) {
       Serial.print(F("Device \""));
-      Serial.print(locdata[0].as<String>());
+      Serial.print(_target[0].as<String>());
       Serial.print(F("\" at "));
-      Serial.print(locdata[1].as<String>());
+      Serial.print(_target[1].as<String>());
       Serial.println(F(" is offline"));
       rtd++;
       continue;
+    }
+
+    String data;
+    bool succ;
+    Serial.println(F("\r\nSending config"));
+    JsonArray& _saved = nSet["saved"];
+    _saved.printTo(data);
+    _saved.printTo(Serial);
+    succ = sendToSlave('\x4B' + data, _target[1].as<const char*>());
+    Serial.println(succ ? "suc" : "nah");
+    yield();
+  }
+
+  /*
+    //Refreshing slaves config
+    uint8_t rtd = 0;
+    while (rtd < nSet["remote"].size() && gotwifi) {
+      JsonArray& locdata = nSet["remote"][rtd]["loc"];
+      int32_t pingresp = Pinger::Ping(locdata[1].as<const char*>());
+      if (pingresp <= 0) {
+        Serial.print(F("Device \""));
+        Serial.print(locdata[0].as<String>());
+        Serial.print(F("\" at "));
+        Serial.print(locdata[1].as<String>());
+        Serial.println(F(" is offline"));
+        rtd++;
+        continue;
       }
 
       bool succ;
-      //Refresh devices connected to slaves
-      Serial.println(F("\r\nRefreshing devices"));
-      succ = sendToSlave("\x57", locdata[1].as<const char*>());
-      Serial.println(succ ? "suc" : "nah");
-      yield();
 
       //Refresh master config
       Serial.println(F("\r\nRequest for sensor list"));
@@ -270,50 +272,45 @@ void setup() {
       JsonArray& remSens = remSensBuf.parseArray(xd);
       if (!remSens.success()) Serial.println(F("Unable to fetch data"));
       else {
-      for (uint8_t a = 0; a < remSens.size(); a++) {
-      JsonObject& entry = remSens[a];
-      JsonArray& remdir = nSet["remote"];
-      JsonArray& devs = remdir[0]["dev"];
+        for (uint8_t a = 0; a < remSens.size(); a++) {
+          JsonObject& entry = remSens[a];
+          JsonArray& remdir = nSet["remote"];
+          JsonArray& devs = remdir[0]["dev"];
 
-      int entryCode = isMember(devs, entry);
-      if (entryCode == -1) { //Create entry for new sensor
-      JsonObject& newEntry = devs.createNestedObject();
-      newEntry["n"] = entry["n"];
-      newEntry["a"] = entry["a"];
+          int entryCode = isMember(devs, entry);
+          if (entryCode == -1) { //Create entry for new sensor
+            JsonObject& newEntry = devs.createNestedObject();
+            newEntry["n"] = entry["n"];
+            newEntry["a"] = entry["a"];
+          }
+        }
       }
-      }
-      }
-      saveJson(nSet, "SENSORS.TXT");
+      saveJson(nSet, "/SENSORS.TXT");
 
       //Send configs to slaves
-      Serial.println(F("\r\nSending config"));
-      JsonArray& remoteSens = nSet["remote"][0]["dev"];
-      String data;
-      remoteSens.printTo(data);
-      succ = sendToSlave('\x4B' + data, locdata[1].as<const char*>());
-      Serial.println(succ ? "suc" : "nah");
-      yield();
+
 
       rtd++;
-      }
+    }
 
 
-      nSensor = nSet["remote"].size();
-      Serial.println("\nRemote:");
-      for (uint8_t a = 0; a < nSensor; a++) {
+    nSensor = nSet["remote"].size();
+    Serial.println("\nRemote:");
+    for (uint8_t a = 0; a < nSensor; a++) {
       Serial.print("\t" + nSet["remote"][a]["loc"][0].as<String>());
       Serial.println(" : " + nSet["remote"][a]["loc"][1].as<String>());
       for (uint8_t x = 0; x < nSet["remote"][a]["dev"].size(); x++)
-      Serial.println("\t\t*" + nSet["remote"][a]["dev"][x]["n"].as<String>());
-      }
+        Serial.println("\t\t*" + nSet["remote"][a]["dev"][x]["n"].as<String>());
+    }
 
 
-      String data = "\x4B[";
-      for (int q = 0; q < nSet["remote"][0]["dev"].size(); q++) {
+    String data = "\x4B[";
+    for (int q = 0; q < nSet["remote"][0]["dev"].size(); q++) {
       if (q > 0) data += ', ';
       data += nSet["remote"][0]["dev"][q].as<String>();
-      }
-      data += ']';
+    }
+    data += ']';
+
   */
   yield();
 }
@@ -323,15 +320,24 @@ bool outLoop = false;
 
 void loop() {
 idle:
-  if (millis() >= nextAvailable) { //refresh every time possible
-    refreshSensors(&ext, "SENSORS.TXT");
-    ext.refreshPorts();
-    nextAvailable = millis() + minDelay; //Change if needed to bigger value
+  if (debugServer.hasClient() && (!debugClient || !debugClient.connected())) {
+    debugClient = debugServer.available();
+    Serial.print(F("New debug client\r\n"));
+    debugClient.println(F("New debug client"));
+    debugClient.println(printDateTime(zegar));
   }
-
+  if (debugClient.available()) debugClient.write(debugClient.read());
   zegar.readRTC();
   server.handleClient();
   yield();
+
+  if (millis() >= nextAvailable) { //refresh every time possible
+    //We can refresh remote device without refreshing them in file
+    if (analogRead(SD_D) < 512)
+      refreshSensors(&ext, "/SENSORS.TXT");
+    ext.refreshPorts();
+    nextAvailable = millis() + minDelay; //Change if needed to bigger value
+  }
 
   if ((zegar.minute() % 5) == 0 && !outLoop) {
     doIdle = false;
@@ -344,7 +350,7 @@ idle:
 
   if (analogRead(SD_D) < 512) {
     DynamicJsonBuffer jsonBuffer(1000);
-    File root = SD.open("SENSORS.TXT", FILE_READ);
+    File root = SD.open("/SENSORS.TXT", FILE_READ);
     JsonObject& setts = jsonBuffer.parseObject(root);
     root.close();
 
@@ -367,33 +373,42 @@ idle:
       File dest = SD.open(path, FILE_WRITE);
       dest.print(printDateTime(zegar) + ";");
       dest.print(settings.name());
-      dest.print(":(");
+      dest.print(F(":("));
       dest.flush();
-      bool first = true;
       for (uint8_t c = 0; c < ext.getCount(); c++) {
         Serial.print(String(c + 1) + "/" + String(ext.getCount()));
         Serial.print('\t');
         Serial.print(ext.typeOf(c));
-        if (ext.typeOf(c) == 0) {
-          Serial.println();
-          continue;
+        int pos;
+        String _name;
+        switch (ext.typeOf(c)) {
+          case 0:
+            Serial.println();
+            continue;
+          case 5: pos = nSet[c]["c"].as<int>();
+            _name = setts["saved"][pos]["n"].as<String>();
+            break;
+          case 11:
+          case 21:
+          case 22:
+          default: pos = c;
+            _name = nSet[c]["n"].as<String>();
+            break;
         }
-        int pos = nSet[c].as<int>();
+
         double tempRead = ext.getTemp(c);
         Serial.print('\t' + String(tempRead));
-        Serial.println('\t' + setts["saved"][pos]["n"].as<String>());
-        if (!first) dest.print(F(","));
-        else first = false;
-        dest.print(setts["saved"][pos]["n"].as<String>());
+        Serial.println('\t' + _name);
+        if (c > 0) dest.print(F(","));
+        dest.print(_name);
         dest.print(F("="));
         dest.print(tempRead, 1);
         dest.flush();
       }
-      dest.println(F(");"));
+      dest.println(");");
 
-      uint8_t rtd = 0;
-      while (rtd < setts["remote"].size()) {
-        JsonArray& locdata = setts["remote"][rtd]["loc"];
+      for (uint8_t rtd = 0; rtd < setts["remote"].size(); rtd++) {
+        JsonArray& locdata = setts["remote"][rtd];
         int32_t pingresp = Pinger::Ping(locdata[1].as<const char*>());
         if (pingresp <= 0) {
           Serial.print(F("Device \""));
@@ -401,7 +416,6 @@ idle:
           Serial.print(F("\" at "));
           Serial.print(locdata[1].as<String>());
           Serial.println(F(" is offline"));
-          rtd++;
           continue;
         }
 
@@ -415,23 +429,23 @@ idle:
         JsonArray& readVal = readBuf.parseArray(xdd);
         dest.print(locdata[0].as<String>());
         dest.print(F(":("));
-        first = true;
+        bool first = true;
         for (uint8_t a = 0; a < readVal.size(); a++) {
           if (!first) dest.print(F(","));
           else first = false;
           dest.print(readVal[a][0].as<String>());
-          dest.print(F("="));
+          dest.print('=');
           dest.print(readVal[a][1].as<double>(), 1);
           dest.flush();
         }
         dest.println(F(");"));
-        rtd++;
       }
       dest.flush();
+
       dest.close();
+
     }
     yield();
-
   } else {
     Serial.println(F("NO SDCARD!"));
     while (digitalRead(SD_D)) delay(1000);
@@ -650,12 +664,45 @@ void timeset() {
   server.sendContent(F("Location: /settings\r\n"));
 }
 
+void sensorBroadcast() {
+  DynamicJsonBuffer sensBuff(1000);
+  File tmpSens = SD.open("/SENSORS.TXT" , FILE_READ);
+  JsonObject& sensSet = sensBuff.parseObject(tmpSens);
+  tmpSens.close();
+
+  for (uint8_t rtd = 0; rtd < sensSet["remote"].size(); rtd++) {
+    JsonArray& _target = sensSet["remote"][rtd];
+    int32_t pingresp = Pinger::Ping(_target[1].as<const char*>());
+    if (pingresp <= 0) {
+      Serial.print(F("Device \""));
+      Serial.print(_target[0].as<String>());
+      Serial.print(F("\" at "));
+      Serial.print(_target[1].as<String>());
+      Serial.println(F(" is offline"));
+      rtd++;
+      continue;
+    }
+
+    String data;
+    bool succ;
+    Serial.println(F("\r\nSending config"));
+    JsonArray& _saved = sensSet["saved"];
+    _saved.printTo(data);
+    _saved.printTo(Serial);
+    succ = sendToSlave('\x4B' + data, _target[1].as<const char*>());
+    Serial.println(succ ? "suc" : "nah");
+    yield();
+  }
+  server.sendContent(F("HTTP/1.1 303 See Other\r\n"));
+  server.sendContent(F("Location: /sensors\r\n"));
+}
+
 void sensorSettings() {
   if (!settings.webAuthenticate(&server))
     return server.requestAuthentication();
 
   DynamicJsonBuffer sensBuff(1000);
-  File tmpSens = SD.open("SENSORS.TXT" , FILE_READ);
+  File tmpSens = SD.open("/SENSORS.TXT" , FILE_READ);
   JsonObject& sensSet = sensBuff.parseObject(tmpSens);
   tmpSens.close();
 
@@ -681,7 +728,6 @@ void sensorSettings() {
     server.sendContent(F("HTTP/1.1 303 See Other\r\n"));
     server.sendContent(F("Location: /sensors\r\n"));
     saveJson(sensSet, "/SENSORS.TXT");
-    sensSet.prettyPrintTo(Serial);
   } else if (server.method() == HTTP_GET && server.args() == 0) {
     server.sendContent(F("<!DOCTYPE html><html><head><title>Sensors</title>"));
     server.sendContent(F("<style>table,th,td{border: 1px solid black;"));
@@ -691,14 +737,24 @@ void sensorSettings() {
     server.sendContent(F("<th>Address/Port</th><th>Temperature</th></tr>"));
 
     for (uint8_t a = 0; a < ext.getCount(); a++) {
-      uint8_t pos = sensSet["local"][a];
-      String _name = sensSet["saved"][pos]["n"].as<String>();
+      int pos = a;
+      String _name;
+      if (ext.typeOf(a) == 5) {
+        pos = sensSet["local"][a]["c"];
+        _name = sensSet["saved"][pos]["n"].as<String>();
+      } else if (ext.typeOf(a) != 0)
+        _name = sensSet["local"][pos]["n"].as<String>();
+      else _name = "N/C";
       server.sendContent(F("<tr><td>"));
       server.sendContent(String(ext.typeOf(a)));
       server.sendContent(F("</td><td>"));
-      server.sendContent(sensSet["saved"][pos]["n"].as<char*>());
+      server.sendContent(_name);
       server.sendContent(F("</td><td>"));
-      server.sendContent(sensSet["saved"][pos]["a"]);
+      if (ext.typeOf(a) == 5)
+        server.sendContent(sensSet["saved"][pos]["a"]);
+      else if (ext.typeOf(a) > 0)
+        server.sendContent(String(a));
+      else server.sendContent(F("N/C"));
       server.sendContent(F("</td><td>"));
 
       if (ext.typeOf(a) != 0)
@@ -718,17 +774,16 @@ void sensorSettings() {
       server.sendContent(F(" value = \""));
       server.sendContent(_name);
       server.sendContent(F("\"><td>"));
-
       server.sendContent(sensSet["saved"][a]["a"]);
-
       server.sendContent(F("</td><td><input type=\"checkbox\" name=\"Remove\" value= "));
       server.sendContent(String(a));
       server.sendContent(F(">Remove</td></tr>"));
     }
 
-    server.sendContent(F("<button type=\"submit\" value=\"Save\">Save Changes</button>"));
+    server.sendContent(F("</table><button type=\"submit\" value=\"Save\">Save Changes</button>"));
     server.sendContent(F("<button type=\"reset\" value=\"Reset\">Reset</button>"));
-    server.sendContent(F("</form></table></body></html>"));
+    server.sendContent(F("</form><button onclick=\"location.href='/sensorsbdc'\""));
+    server.sendContent(F("type=\"button\">Settings</button></body></html>"));
   }
   return void();
 }
@@ -799,6 +854,9 @@ bool loadFromSdCard(String path) {
 }
 
 void handleFileUpload() {
+  if (!settings.webAuthenticate(&server))
+    server.requestAuthentication();
+
   File uploadFile;
   if (server.uri() != "/") return;
   HTTPUpload& upload = server.upload();
@@ -902,19 +960,17 @@ void printDirectory() {
       cnt--;
       continue;
     }
-    if (!entry)
-      break;
+    if (!entry) break;
 
     String output;
     if (cnt > 0)
       output = ',';
 
     output += F("{\"type\":\"");
-    output += (entry.isDirectory()) ? "dir" : "file";
+    output += entry.isDirectory() ? F("dir") : F("file");
     output += F("\",\"name\":\"");
     output += entry.name();
-    output += F("\"");
-    output += F("}");
+    output += F("\"}");
     server.sendContent(output);
     entry.close();
   }
@@ -923,6 +979,9 @@ void printDirectory() {
 }
 
 void handleNotFound() {
+  if (!settings.webAuthenticate(&server))
+    return server.requestAuthentication();
+
   bool loadResult = loadFromSdCard(server.uri());
   if (analogRead(SD_D) < 512 && loadResult) return;
 

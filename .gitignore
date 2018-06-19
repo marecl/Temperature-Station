@@ -57,3 +57,6 @@ x509.h
 
 # KiCAD net file
 *.net
+
+# Compiled Arduino sketches
+*.hex

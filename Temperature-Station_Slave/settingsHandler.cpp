@@ -3,6 +3,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266WebServer.h>
+#include <WiFiClient.h>
 #include "settingsHandler.h"
 #include "FS.h"
 
@@ -15,21 +16,6 @@ settingsHandler::settingsHandler() {
   this->_user = new char[16];
   this->_pwd = new char[16];
   this->_dhcp = true;
-
-  /*
-    this->_ip = IPAddress(192, 168, 4, 1);
-    this->_gw = IPAddress(192, 168, 4, 1);
-    this->_mask = IPAddress(255, 255, 255, 0);
-  */
-
-  this->setField(this->_user, "admin", 16);
-  this->setField(this->_pwd, "admin", 16);
-
-  String _n = "TemperatureSlave";
-  this->setField(this->_name, _n.c_str(), 32);
-  this->setField(this->_passap, _n.c_str(), 32);
-  _n += String(ESP.getChipId());
-  this->setField(this->_ssidap, _n.c_str(), 32);
 }
 
 settingsHandler::~settingsHandler() {
@@ -40,8 +26,8 @@ void settingsHandler::save(const char* _filename) {
   SPIFFS.begin();
   File _toSave = SPIFFS.open(_filename, "w");
   _toSave.print(F("{\"DHCP\":"));
-  _toSave.print(this->_dhcp ? "true," : "false,");
-  _toSave.print(F("\"NAME\":\""));
+  _toSave.print(this->_dhcp ? "true" : "false");
+  _toSave.print(F(",\"NAME\":\""));
   _toSave.print(this->_name);
   _toSave.print(F("\",\"SSID\":\""));
   _toSave.print(this->_ssid);
@@ -68,21 +54,20 @@ void settingsHandler::save(const char* _filename) {
   return void();
 }
 
-bool settingsHandler::load(const char* _filename) {
+bool settingsHandler::load(const char* _f) {
   SPIFFS.begin();
-  if (!SPIFFS.exists("/set.txt")) {
+  if (!SPIFFS.exists(_f)) {
     SPIFFS.end();
     return false;
   }
-  File _toSave = SPIFFS.open(_filename, "r");
+  File _toSave = SPIFFS.open(_f, "r");
   DynamicJsonBuffer _ld(JSON_OBJECT_SIZE(11) + 230);
   JsonObject& _data = _ld.parseObject(_toSave);
   _toSave.close();
   SPIFFS.end();
   if (!_data.success()) return false;
-  _data.printTo(Serial);
+  _data.printTo(*(this->_debug));
 
-  this->_dhcp = _data["DHCP"].as<bool>();
   this->setField(this->_name, _data["NAME"], 32);
   this->setField(this->_ssid, _data["SSID"], 32);
   this->setField(this->_pass, _data["PASS"], 32);
@@ -93,36 +78,38 @@ bool settingsHandler::load(const char* _filename) {
   this->_ip = stringToIP(_data["IP"]);
   this->_gw = stringToIP(_data["GW"]);
   this->_mask = stringToIP(_data["MASK"]);
-
+  this->_dhcp = _data["DHCP"].as<bool>();
   return true;
 }
-
 
 void settingsHandler::serialDebug(HardwareSerial *_debug) {
   this->_debug = _debug;
   return void();
 }
 
-bool settingsHandler::reset(const char* _l, const char* _p) {
+bool settingsHandler::reset(const char* _l, const char* _p, const char* _f) {
   if (this->authenticate(_l, _p) == false) return false;
   _debug->println("Removing config");
   SPIFFS.begin();
-  SPIFFS.remove("/set.txt");
+  SPIFFS.remove(_f);
   SPIFFS.end();
   return true;
 }
 
-void settingsHandler::configUpdateServer(ESP8266WebServer *_conf, ESP8266HTTPUpdateServer *_upd) {
-  _upd->setup(_conf, "/update", this->_user, this->_pwd);
+void settingsHandler::configUpdateServer(ESP8266WebServer *_conf, ESP8266HTTPUpdateServer *_upd, const char* _url) {
+  _upd->setup(_conf, _url, this->_user, this->_pwd);
   return void();
 }
 
+bool settingsHandler::webAuthenticate(ESP8266WebServer* _s) {
+  return _s->authenticate(this->_user, this->_pwd);
+}
+
 bool settingsHandler::beginWiFi() {
-  WiFi.disconnect();
-  WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
   if (this->_dhcp == false)
     WiFi.config(this->_ip, this->_gw, this->_mask);
+  WiFi.setOutputPower(0);
   WiFi.begin(this->_ssid, this->_pass);
   int i = 0;
   while (WiFi.status() != WL_CONNECTED && i++ < 20)  //wait 10 seconds
@@ -137,21 +124,16 @@ bool settingsHandler::beginWiFi() {
   return true;
 }
 
-void settingsHandler::beginAP() {
-  WiFi.disconnect();
-  WiFi.persistent(false);
+bool settingsHandler::beginAP() {
+  WiFi.mode(WIFI_OFF);
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(this->_ssidap, this->_passap);
-  return void();
+  WiFi.setOutputPower(0);
+  return WiFi.softAP(this->_ssidap, this->_passap, false);
 }
 
-void settingsHandler::setPassword(const char* _password) {
-  this->setField(this->_pwd, _password, 16);
-  return void();
-}
-
-void settingsHandler::setUsername(const char* _username) {
-  this->setField(this->_user, _username, 16);
+void settingsHandler::configUser(const char* _u, const char* _p) {
+  this->setField(this->_user, _u, 16);
+  this->setField(this->_pwd, _p, 16);
   return void();
 }
 
@@ -224,29 +206,29 @@ IPAddress settingsHandler::stringToIP(const char* input) {
   return IPAddress(parts[0], parts[1], parts[2], parts[3]);
 }
 
-void settingsHandler::ssid(const char* _ssid){
+void settingsHandler::ssid(const char* _ssid) {
   setField(this->_ssid, _ssid, 32);
   return void();
 }
 
-void settingsHandler::ssidAP(const char* _ssidap){
+void settingsHandler::ssidAP(const char* _ssidap) {
   setField(this->_ssidap, _ssidap, 32);
   return void();
 }
 
-char* settingsHandler::ssid() {
+const char* settingsHandler::ssid() {
   return this->_ssid;
 }
 
-char* settingsHandler::ssidAP() {
+const char* settingsHandler::ssidAP() {
   return this->_ssidap;
 }
 
-char* settingsHandler::username() {
+const char* settingsHandler::username() {
   return this->_user;
 }
 
-char* settingsHandler::name() {
+const char* settingsHandler::name() {
   return this->_name;
 }
 

@@ -1,10 +1,10 @@
-#include <Wire.h>
+#include <DallasTemperature.h>
 #include <DHT.h>
 #include <OneWire.h>
-#include <DallasTemperature.h>
+#include <Wire.h>
 
 #define F_CPU 8000000L
-#define N_PORTS 8
+#define N_PORTS 7//8
 //#define DEBUG
 
 /*
@@ -25,7 +25,7 @@
 
 /* Pins, temperatures, saved ports */
 const uint8_t address = 0x10;
-const uint8_t _pins[N_PORTS] = {5, 6, 7, 8, 9, 10, 11, 12};
+const uint8_t _pins[N_PORTS] = {5, 6, 7, 8, 9, 10, 11, /*12*/};
 static double _temps[N_PORTS];  //Readings
 static uint8_t _ports[N_PORTS]; //Socket status
 static uint8_t _addr[N_PORTS][8]; //1wire address
@@ -46,6 +46,9 @@ void setup() {
     For this option to work:
       No bypass: cut all 1wire jumpers out from connectors, solder A3 jumper
       Bypass: Connect all jumpers, desolder A3 jumper
+      Or just move everything to DEFINE, whatever
+    Added 'lock' or diode output when refreshing. 
+    Use it as debug or "not yet" pin.
   */
   pinMode(A3, INPUT_PULLUP);
   if (digitalRead(A3))
@@ -133,6 +136,7 @@ void receiveEvent(int numBytes) {
 }
 
 void refreshPorts() { //Detect if ports are used
+  digitalWrite(13, HIGH);
   const uint8_t _t[3] = {11, 21, 22};
   for (uint8_t a = 0; a < N_PORTS; a++) {
     //Setup for detecting plugged sensors
@@ -172,5 +176,6 @@ void refreshPorts() { //Detect if ports are used
       }
     }
   }
+  digitalWrite(13, LOW);
   return void();
 }
