@@ -1,14 +1,4 @@
-#include <Arduino.h>
-#include <cstdlib>
-#include <Wire.h>
 #include "Muxtemp.h"
-
-#define MUXTEMP_REFRESH 0x75
-#define MUXTEMP_SEND   0x78
-#define MUXTEMP_ADDR  0x81
-#define MUXTEMP_READ  0x84
-#define MUXTEMP_COUNT 0x87
-#define MUXTEMP_BYPASS  0x90
 
 /*
    0x75 - refresh sensors
@@ -19,20 +9,24 @@
    0x90 - is 1wire bypassed
 */
 
-Muxtemp::Muxtemp(TwoWire &_Wire) {
-  this->_Wire = &_Wire;
+Muxtemp::Muxtemp(TwoWire &_W, uint8_t _a) {
+  this->_Wire = &_W;
+  this->_addr = _a;
+  this->_available = 0;
+  this->_count = 0;
+  this->_delay = 5000;
 }
 
 Muxtemp::~Muxtemp() {
 }
 
-uint8_t Muxtemp::begin(uint8_t _addr) {
-  this->_addr = _addr;
+uint8_t Muxtemp::begin() {
   _Wire->beginTransmission(this->_addr);
   byte _ret = _Wire->endTransmission(true);
-  this->_count = _readCount();
+  if (_ret) return _ret;
+  this->_count = this->_readCount();
   this->_sensors = new uint8_t[this->_count];
-  return _ret;
+  return 0;
 }
 
 uint8_t Muxtemp::_readCount() {
@@ -51,6 +45,12 @@ void Muxtemp::refreshPorts() {
   _Wire->beginTransmission(this->_addr);
   _Wire->write(MUXTEMP_REFRESH);
   _Wire->endTransmission();
+  this->_available = millis() + this->_delay;
+  return void();
+}
+
+void Muxtemp::setDelay(uint32_t _d) {
+  this->_delay = _d;
   return void();
 }
 
@@ -106,4 +106,9 @@ bool Muxtemp::bypass1Wire() {
   _Wire->endTransmission();
   _Wire->requestFrom(this->_addr, 1);
   return Wire.read() == 1 ? true : false;
+}
+
+uint32_t Muxtemp::lock() {
+  if (millis() > this->_available) return 0;
+  else return this->_available - millis();
 }

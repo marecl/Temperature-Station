@@ -36,6 +36,7 @@ class Czas { //PCF8563
     uint32_t dateAsEpoch();
     uint32_t epochToDate(uint8_t, uint8_t, uint8_t, uint16_t, uint8_t, uint8_t, uint8_t);
     bool compareTimeEpoch(uint32_t, int); //I'm too lazy to convert date to epoch
+    bool isValid();
   private:
     TwoWire *_Wire;
     byte bcdToDec(byte);

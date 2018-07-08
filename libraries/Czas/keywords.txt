@@ -15,3 +15,4 @@ decToBcd	KEYWORD2
 dateAsEpoch	KEYWORD2
 epochToDate	KEYWORD2
 compareTimeEpoch	KEYWORD2
+isValid	KEYWORD2

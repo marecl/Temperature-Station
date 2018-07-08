@@ -7,3 +7,5 @@ getCount	KEYWORD2
 typeOf	KEYWORD2   
 getAddress	KEYWORD2
 bypass1Wire	KEYWORD2
+setDelay	KEYWORD2
+lock	KEYWORD2

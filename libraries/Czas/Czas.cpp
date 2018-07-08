@@ -1,5 +1,5 @@
 #include "Czas.h"
-#define LEAP_YEAR(Y) ( ((1970+(Y))>0) && !((1970+(Y))%4) && ( ((1970+(Y))%100) || !((1970+(Y))%400) ) )
+#define LEAP_YEAR(Y) (((1970+(Y))>0)&&!((1970+(Y))%4)&&(((1970+(Y))%100)||!((1970+(Y))%400)))
 /* PCF8563 inferfacing library */
 
 Czas::Czas(TwoWire &_Wire) {
@@ -26,12 +26,12 @@ void Czas::readRTC() {
   this->_Wire->write(0x02);
   this->_Wire->endTransmission();
   this->_Wire->requestFrom(RTC_ADDR, 7);
-  this->_second = this->bcdToDec(_Wire->read() & B01111111); // sek
-  this->_minute = this->bcdToDec(_Wire->read() & B01111111); // min
+  this->_second = this->bcdToDec(_Wire->read() & B01111111); //sek
+  this->_minute = this->bcdToDec(_Wire->read() & B01111111); //min
   this->_hour = this->bcdToDec(_Wire->read() & B00111111); //godz
   this->_day = this->bcdToDec(_Wire->read() & B00111111); //dz msc
   this->_dow = this->bcdToDec(_Wire->read() & B00000111); //dz tyg
-  this->_month = this->bcdToDec(_Wire->read() & B00011111); // msc
+  this->_month = this->bcdToDec(_Wire->read() & B00011111); //msc
   this->_year = this->bcdToDec(_Wire->read()); //rok
   this->_year += 2000;
 }
@@ -162,4 +162,14 @@ int Czas::month() {
 }
 int Czas::year() {
   return this->_year;
+}
+bool Czas::isValid() {
+  if (this->_second > 60) return false;
+  if (this->_minute > 60) return false;
+  if (this->_hour > 23) return false;
+  if (this->_day > 31) return false;
+  if (this->_month > 12) return false;
+  if (this->_year > 2100) return false;
+  if (this->_dow > 7) return false;
+  return true;
 }
