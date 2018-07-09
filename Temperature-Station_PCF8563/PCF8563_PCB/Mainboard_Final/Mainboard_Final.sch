@@ -1,0 +1,1751 @@
+EESchema Schematic File Version 4
+LIBS:Mainboard_4.0-cache
+LIBS:RJ45_I2C_2.0-cache
+EELAYER 26 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 1 1
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L Connector_Specialized:SD_Card J?
+U 1 1 5AC6892A
+P 6700 2550
+F 0 "J?" H 6700 3215 50  0000 C CNN
+F 1 "SD_Card" H 6700 3124 50  0000 C CNN
+F 2 "10067847-001" H 6900 2900 50  0001 C CNN
+F 3 "http://portal.fciconnect.com/Comergent//fci/drawing/10067847.pdf" H 6700 2550 50  0001 C CNN
+	1    6700 2550
+	1    0    0    -1  
+$EndComp
+Text GLabel 4700 2250 0    50   Input ~ 0
+GPIO16
+Text GLabel 4700 2350 0    50   Input ~ 0
+GPIO13
+$Comp
+L power:GND #PWR?
+U 1 1 5AC68B11
+P 5700 3050
+F 0 "#PWR?" H 5700 2800 50  0001 C CNN
+F 1 "GND" H 5705 2877 50  0000 C CNN
+F 2 "" H 5700 3050 50  0001 C CNN
+F 3 "" H 5700 3050 50  0001 C CNN
+	1    5700 3050
+	1    0    0    -1  
+$EndComp
+Text GLabel 4700 2650 0    50   Input ~ 0
+GPIO14
+Text GLabel 4700 2850 0    50   Input ~ 0
+GPIO12
+$Comp
+L Device:R R?
+U 1 1 5AC68C45
+P 5100 2000
+F 0 "R?" H 5170 2046 50  0000 L CNN
+F 1 "10k" H 5170 1955 50  0000 L CNN
+F 2 "" V 5030 2000 50  0001 C CNN
+F 3 "~" H 5100 2000 50  0001 C CNN
+	1    5100 2000
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5AC68DC6
+P 5350 2000
+F 0 "R?" H 5420 2046 50  0000 L CNN
+F 1 "10k" H 5420 1955 50  0000 L CNN
+F 2 "" V 5280 2000 50  0001 C CNN
+F 3 "~" H 5350 2000 50  0001 C CNN
+	1    5350 2000
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5AC68DF4
+P 5600 2000
+F 0 "R?" H 5670 2046 50  0000 L CNN
+F 1 "10k" H 5670 1955 50  0000 L CNN
+F 2 "" V 5530 2000 50  0001 C CNN
+F 3 "~" H 5600 2000 50  0001 C CNN
+	1    5600 2000
+	1    0    0    -1  
+$EndComp
+Text GLabel 4750 1850 0    50   Input ~ 0
+3V3_L
+$Comp
+L Device:R R?
+U 1 1 5AC6BEF8
+P 4850 2000
+F 0 "R?" H 4920 2046 50  0000 L CNN
+F 1 "10k" H 4920 1955 50  0000 L CNN
+F 2 "" V 4780 2000 50  0001 C CNN
+F 3 "~" H 4850 2000 50  0001 C CNN
+	1    4850 2000
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	4700 2850 4850 2850
+Wire Wire Line
+	4700 2350 5350 2350
+Wire Wire Line
+	4700 2250 5600 2250
+Wire Wire Line
+	5600 2150 5600 2250
+Connection ~ 5600 2250
+Wire Wire Line
+	5600 2250 5800 2250
+Wire Wire Line
+	5350 2150 5350 2350
+Connection ~ 5350 2350
+Wire Wire Line
+	5350 2350 5800 2350
+Wire Wire Line
+	5100 2150 5100 2650
+Wire Wire Line
+	4850 2150 4850 2850
+Wire Wire Line
+	5800 2450 5700 2450
+Wire Wire Line
+	5700 2450 5700 2750
+Wire Wire Line
+	5800 2750 5700 2750
+Connection ~ 5700 2750
+Wire Wire Line
+	5700 2750 5700 3050
+$Comp
+L Timer_RTC:PCF8563T U?
+U 1 1 5AC71422
+P 9550 1650
+F 0 "U?" H 9550 2228 50  0000 C CNN
+F 1 "PCF8563T" H 9550 2137 50  0000 C CNN
+F 2 "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm" H 9550 1650 50  0001 C CNN
+F 3 "http://www.nxp.com/documents/data_sheet/PCF8563.pdf" H 9550 1650 50  0001 C CNN
+	1    9550 1650
+	1    0    0    -1  
+$EndComp
+Text GLabel 10150 1300 1    50   Input ~ 0
+SDA
+Text GLabel 10050 1300 1    50   Input ~ 0
+SCL
+Wire Wire Line
+	9950 1450 10050 1450
+Wire Wire Line
+	9950 1550 10150 1550
+Wire Wire Line
+	10050 1300 10050 1450
+Connection ~ 10050 1450
+Wire Wire Line
+	10050 1450 10400 1450
+Wire Wire Line
+	10150 1300 10150 1550
+Connection ~ 10150 1550
+Wire Wire Line
+	10150 1550 10400 1550
+$Comp
+L Connector_Generic:Conn_01x03 J?
+U 1 1 5AC73D6F
+P 10600 1550
+F 0 "J?" H 10679 1592 50  0000 L CNN
+F 1 "I2C Breakout" H 10679 1501 50  0000 L CNN
+F 2 "" H 10600 1550 50  0001 C CNN
+F 3 "~" H 10600 1550 50  0001 C CNN
+	1    10600 1550
+	1    0    0    1   
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 5AC73EFC
+P 10400 1650
+F 0 "#PWR?" H 10400 1400 50  0001 C CNN
+F 1 "GND" H 10405 1477 50  0000 C CNN
+F 2 "" H 10400 1650 50  0001 C CNN
+F 3 "" H 10400 1650 50  0001 C CNN
+	1    10400 1650
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 5AC73F22
+P 9550 2050
+F 0 "#PWR?" H 9550 1800 50  0001 C CNN
+F 1 "GND" H 9555 1877 50  0000 C CNN
+F 2 "" H 9550 2050 50  0001 C CNN
+F 3 "" H 9550 2050 50  0001 C CNN
+	1    9550 2050
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:D D?
+U 1 1 5AC741CE
+P 9150 1250
+F 0 "D?" H 9150 1034 50  0000 C CNN
+F 1 "1N4148" H 9150 1125 50  0000 C CNN
+F 2 "" H 9150 1250 50  0001 C CNN
+F 3 "~" H 9150 1250 50  0001 C CNN
+	1    9150 1250
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	9300 1250 9550 1250
+Text GLabel 9000 1250 0    50   Input ~ 0
+3V3_L
+$Comp
+L Device:D D?
+U 1 1 5AC74E97
+P 9150 900
+F 0 "D?" H 9100 700 50  0000 C CNN
+F 1 "1N4148" H 9100 800 50  0000 C CNN
+F 2 "" H 9150 900 50  0001 C CNN
+F 3 "~" H 9150 900 50  0001 C CNN
+	1    9150 900 
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	9300 900  9300 1250
+$Comp
+L Device:Battery_Cell BT?
+U 1 1 5AC75A85
+P 8800 900
+F 0 "BT?" V 8550 900 50  0000 C CNN
+F 1 "Battery_Cell" V 8650 900 50  0000 C CNN
+F 2 "" V 8800 960 50  0001 C CNN
+F 3 "~" V 8800 960 50  0001 C CNN
+	1    8800 900 
+	0    1    1    0   
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 5AC75CA1
+P 8700 900
+F 0 "#PWR?" H 8700 650 50  0001 C CNN
+F 1 "GND" H 8705 727 50  0000 C CNN
+F 2 "" H 8700 900 50  0001 C CNN
+F 3 "" H 8700 900 50  0001 C CNN
+	1    8700 900 
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:Crystal Y?
+U 1 1 5AC75F25
+P 9050 1650
+F 0 "Y?" H 9100 1500 50  0000 R CNN
+F 1 "32,768kHz" H 9250 1800 50  0000 R CNN
+F 2 "" H 9050 1650 50  0001 C CNN
+F 3 "~" H 9050 1650 50  0001 C CNN
+	1    9050 1650
+	0    -1   1    0   
+$EndComp
+Wire Wire Line
+	9050 1500 9050 1450
+Wire Wire Line
+	9050 1450 9150 1450
+Wire Wire Line
+	9050 1800 9050 1850
+Wire Wire Line
+	9050 1850 9150 1850
+Text GLabel 8050 2350 2    50   Input ~ 0
+ADC
+$Comp
+L power:GND #PWR?
+U 1 1 5AC7C414
+P 2650 3500
+F 0 "#PWR?" H 2650 3250 50  0001 C CNN
+F 1 "GND" H 2655 3327 50  0000 C CNN
+F 2 "" H 2650 3500 50  0001 C CNN
+F 3 "" H 2650 3500 50  0001 C CNN
+	1    2650 3500
+	1    0    0    -1  
+$EndComp
+Text GLabel 1500 3100 2    50   Input ~ 0
+GPIO16
+Text GLabel 1500 3400 2    50   Input ~ 0
+GPIO13
+Text GLabel 1500 3200 2    50   Input ~ 0
+GPIO14
+Text GLabel 1500 3300 2    50   Input ~ 0
+GPIO12
+Text GLabel 1850 3500 2    50   Input ~ 0
+3v3
+Text GLabel 2600 3150 0    50   Input ~ 0
+SCL
+Text GLabel 2600 3050 0    50   Input ~ 0
+SDA
+$Comp
+L Device:R R?
+U 1 1 5AC7C458
+P 2800 3400
+F 0 "R?" V 2800 3400 50  0000 C CNN
+F 1 "4k7" V 2800 3950 50  0000 C CNN
+F 2 "" V 2730 3400 50  0001 C CNN
+F 3 "~" H 2800 3400 50  0001 C CNN
+	1    2800 3400
+	0    -1   -1   0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5ACB104E
+P 1650 3000
+F 0 "R?" V 1600 2850 50  0000 C CNN
+F 1 "4k7" V 1650 3000 50  0000 C CNN
+F 2 "" V 1580 3000 50  0001 C CNN
+F 3 "~" H 1650 3000 50  0001 C CNN
+	1    1650 3000
+	0    1    1    0   
+$EndComp
+Text GLabel 1800 3000 2    50   Input ~ 0
+3V3_L
+$Comp
+L Device:R R?
+U 1 1 5ACB2116
+P 2800 3200
+F 0 "R?" V 2800 3200 50  0000 C CNN
+F 1 "4k7" V 2800 3750 50  0000 C CNN
+F 2 "" V 2730 3200 50  0001 C CNN
+F 3 "~" H 2800 3200 50  0001 C CNN
+	1    2800 3200
+	0    -1   -1   0   
+$EndComp
+Text GLabel 2600 2950 0    50   Input ~ 0
+3V3_L
+Text Notes 500  1650 0    50   ~ 0
+ADC - SD_D\nGPIO12 - MISO\nGPIO13 - MOSI\nGPIO14 - SCK\nGPIO16 - CS\n\nGPIO2 - 1wire\nGPIO4 - SCL\nGPIO5 - SDA
+Text GLabel 1500 2500 2    50   Input ~ 0
+RST
+$Comp
+L Connector_Generic:Conn_01x05 J?
+U 1 1 5ACC4B09
+P 9200 2900
+F 0 "J?" H 9120 2475 50  0000 C CNN
+F 1 "ESP_Prog" H 9120 2566 50  0000 C CNN
+F 2 "" H 9200 2900 50  0001 C CNN
+F 3 "~" H 9200 2900 50  0001 C CNN
+	1    9200 2900
+	-1   0    0    1   
+$EndComp
+Text Notes 8700 3100 0    50   ~ 0
+GND\nTX -> RX\nRX -> TX\nRTS\nDTR
+Text GLabel 2950 2900 0    50   Input ~ 0
+RX
+Text GLabel 2950 2800 0    50   Input ~ 0
+TX
+$Comp
+L Device:R R?
+U 1 1 5ACC7F09
+P 9950 2750
+F 0 "R?" V 9743 2750 50  0000 C CNN
+F 1 "10k" V 9834 2750 50  0000 C CNN
+F 2 "" V 9880 2750 50  0001 C CNN
+F 3 "~" H 9950 2750 50  0001 C CNN
+	1    9950 2750
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5ACC7F83
+P 10000 3300
+F 0 "R?" V 9793 3300 50  0000 C CNN
+F 1 "10k" V 9884 3300 50  0000 C CNN
+F 2 "" V 9930 3300 50  0001 C CNN
+F 3 "~" H 10000 3300 50  0001 C CNN
+	1    10000 3300
+	0    1    1    0   
+$EndComp
+Text GLabel 10250 2550 0    50   Input ~ 0
+RST
+Text GLabel 10550 3500 0    50   Input ~ 0
+GPIO0
+Text GLabel 9400 2800 2    50   Input ~ 0
+TX
+Text GLabel 9400 2900 2    50   Input ~ 0
+RX
+$Comp
+L power:GND #PWR?
+U 1 1 5ACCDF4C
+P 9400 2700
+F 0 "#PWR?" H 9400 2450 50  0001 C CNN
+F 1 "GND" H 9405 2527 50  0000 C CNN
+F 2 "" H 9400 2700 50  0001 C CNN
+F 3 "" H 9400 2700 50  0001 C CNN
+	1    9400 2700
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	9400 3000 9700 3000
+Connection ~ 9700 3000
+Wire Wire Line
+	9700 2750 9800 2750
+Wire Wire Line
+	9700 2750 9700 3000
+Wire Wire Line
+	10100 2750 10250 2750
+Wire Wire Line
+	10150 3300 10250 3300
+Wire Wire Line
+	9850 3100 9850 3300
+Wire Wire Line
+	9400 3100 9750 3100
+Wire Wire Line
+	10550 2950 9750 2950
+Wire Wire Line
+	9750 2950 9750 3100
+Connection ~ 9750 3100
+Wire Wire Line
+	9750 3100 9850 3100
+Wire Wire Line
+	10550 3000 10550 3100
+Wire Wire Line
+	9700 3000 10550 3000
+$Comp
+L power:GND #PWR?
+U 1 1 5ACE96F2
+P 5400 1400
+F 0 "#PWR?" H 5400 1150 50  0001 C CNN
+F 1 "GND" H 5405 1227 50  0000 C CNN
+F 2 "" H 5400 1400 50  0001 C CNN
+F 3 "" H 5400 1400 50  0001 C CNN
+	1    5400 1400
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:C C?
+U 1 1 5ACE9DB3
+P 5400 1250
+F 0 "C?" H 5515 1296 50  0000 L CNN
+F 1 "100nF" H 5400 1450 50  0000 L CNN
+F 2 "" H 5438 1100 50  0001 C CNN
+F 3 "~" H 5400 1250 50  0001 C CNN
+	1    5400 1250
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:CP C?
+U 1 1 5ACE9F0E
+P 7400 1250
+F 0 "C?" H 7518 1296 50  0000 L CNN
+F 1 "10uF" H 7500 1200 50  0000 L CNN
+F 2 "" H 7438 1100 50  0001 C CNN
+F 3 "~" H 7400 1250 50  0001 C CNN
+	1    7400 1250
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:CP C?
+U 1 1 5ACEC532
+P 5700 1250
+F 0 "C?" H 5818 1296 50  0000 L CNN
+F 1 "10uF" H 5650 1500 50  0000 L CNN
+F 2 "" H 5738 1100 50  0001 C CNN
+F 3 "~" H 5700 1250 50  0001 C CNN
+	1    5700 1250
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:C C?
+U 1 1 5ACEF41F
+P 1750 3650
+F 0 "C?" H 1865 3696 50  0000 L CNN
+F 1 "100nF" H 1850 3600 50  0000 L CNN
+F 2 "" H 1788 3500 50  0001 C CNN
+F 3 "~" H 1750 3650 50  0001 C CNN
+	1    1750 3650
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:C C?
+U 1 1 5ACF60D7
+P 7150 1250
+F 0 "C?" H 7100 1550 50  0000 L CNN
+F 1 "100nF" H 7050 1450 50  0000 L CNN
+F 2 "" H 7188 1100 50  0001 C CNN
+F 3 "~" H 7150 1250 50  0001 C CNN
+	1    7150 1250
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 5ACF6137
+P 1750 3800
+F 0 "#PWR?" H 1750 3550 50  0001 C CNN
+F 1 "GND" H 1755 3627 50  0000 C CNN
+F 2 "" H 1750 3800 50  0001 C CNN
+F 3 "" H 1750 3800 50  0001 C CNN
+	1    1750 3800
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:C C?
+U 1 1 5ACF689D
+P 1650 2800
+F 0 "C?" V 1850 2800 50  0000 L CNN
+F 1 "100nF" V 1750 2650 50  0000 L CNN
+F 2 "" H 1688 2650 50  0001 C CNN
+F 3 "~" H 1650 2800 50  0001 C CNN
+	1    1650 2800
+	0    -1   -1   0   
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 5ACF7EBB
+P 1800 2800
+F 0 "#PWR?" H 1800 2550 50  0001 C CNN
+F 1 "GND" V 1800 2650 50  0000 R CNN
+F 2 "" H 1800 2800 50  0001 C CNN
+F 3 "" H 1800 2800 50  0001 C CNN
+	1    1800 2800
+	0    -1   -1   0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5AD02953
+P 2800 3000
+F 0 "R?" V 2800 3000 50  0000 C CNN
+F 1 "4k7" V 2800 3550 50  0000 C CNN
+F 2 "" V 2730 3000 50  0001 C CNN
+F 3 "~" H 2800 3000 50  0001 C CNN
+	1    2800 3000
+	0    -1   -1   0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5AD029B5
+P 2800 3100
+F 0 "R?" V 2800 3100 50  0000 C CNN
+F 1 "4k7" V 2800 3650 50  0000 C CNN
+F 2 "" V 2730 3100 50  0001 C CNN
+F 3 "~" H 2800 3100 50  0001 C CNN
+	1    2800 3100
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	2600 3050 2950 3050
+Wire Wire Line
+	2950 3050 2950 3000
+Wire Wire Line
+	2600 3150 2950 3150
+Wire Wire Line
+	2950 3150 2950 3100
+$Comp
+L Device:D D?
+U 1 1 5AD0BF07
+P 5250 1100
+F 0 "D?" H 5400 850 50  0000 C CNN
+F 1 "1N4007" H 5300 950 50  0000 C CNN
+F 2 "" H 5250 1100 50  0001 C CNN
+F 3 "~" H 5250 1100 50  0001 C CNN
+	1    5250 1100
+	-1   0    0    1   
+$EndComp
+$Comp
+L Device:D D?
+U 1 1 5AD1489F
+P 4950 1250
+F 0 "D?" V 4650 1150 50  0000 L CNN
+F 1 "1N4007" V 4750 1150 50  0000 L CNN
+F 2 "" H 4950 1250 50  0001 C CNN
+F 3 "~" H 4950 1250 50  0001 C CNN
+	1    4950 1250
+	0    1    1    0   
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x11 J?
+U 1 1 5AD38B1C
+P 1300 1500
+F 0 "J?" H 1220 2217 50  0000 C CNN
+F 1 "Breakout_Left" H 1220 2126 50  0000 C CNN
+F 2 "" H 1300 1500 50  0001 C CNN
+F 3 "~" H 1300 1500 50  0001 C CNN
+	1    1300 1500
+	-1   0    0    1   
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x11 J?
+U 1 1 5AD38D98
+P 3500 1500
+F 0 "J?" H 3579 1542 50  0000 L CNN
+F 1 "Breakout_Right" H 3579 1451 50  0000 L CNN
+F 2 "" H 3500 1500 50  0001 C CNN
+F 3 "~" H 3500 1500 50  0001 C CNN
+	1    3500 1500
+	1    0    0    1   
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x11 J?
+U 1 1 5AD3924B
+P 3150 3300
+F 0 "J?" H 3250 3350 50  0000 L CNN
+F 1 "Socket_Right" H 3250 3250 50  0000 L CNN
+F 2 "" H 3150 3300 50  0001 C CNN
+F 3 "~" H 3150 3300 50  0001 C CNN
+	1    3150 3300
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x11 J?
+U 1 1 5AD392E5
+P 1300 3300
+F 0 "J?" H 1750 3350 50  0000 C CNN
+F 1 "Socket_Left" H 1600 3250 50  0000 C CNN
+F 2 "" H 1300 3300 50  0001 C CNN
+F 3 "~" H 1300 3300 50  0001 C CNN
+	1    1300 3300
+	-1   0    0    -1  
+$EndComp
+Wire Wire Line
+	2650 3400 2650 3500
+Wire Wire Line
+	2650 3500 2950 3500
+Text GLabel 1800 2900 2    50   Input ~ 0
+ADC
+Wire Wire Line
+	1500 2900 1800 2900
+$Comp
+L Device:R R?
+U 1 1 5AC9C6F6
+P 7850 2200
+F 0 "R?" H 7920 2246 50  0000 L CNN
+F 1 "10k" H 7920 2155 50  0000 L CNN
+F 2 "" V 7780 2200 50  0001 C CNN
+F 3 "~" H 7850 2200 50  0001 C CNN
+	1    7850 2200
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5AC9C81A
+P 7850 2500
+F 0 "R?" H 7920 2546 50  0000 L CNN
+F 1 "4k7" H 7920 2455 50  0000 L CNN
+F 2 "" V 7780 2500 50  0001 C CNN
+F 3 "~" H 7850 2500 50  0001 C CNN
+	1    7850 2500
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 5ACA167F
+P 7850 2650
+F 0 "#PWR?" H 7850 2400 50  0001 C CNN
+F 1 "GND" H 7855 2477 50  0000 C CNN
+F 2 "" H 7850 2650 50  0001 C CNN
+F 3 "" H 7850 2650 50  0001 C CNN
+	1    7850 2650
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 5ACA44C5
+P 7600 2750
+F 0 "#PWR?" H 7600 2500 50  0001 C CNN
+F 1 "GND" H 7605 2577 50  0000 C CNN
+F 2 "" H 7600 2750 50  0001 C CNN
+F 3 "" H 7600 2750 50  0001 C CNN
+	1    7600 2750
+	1    0    0    -1  
+$EndComp
+Text GLabel 7850 2050 2    50   Input ~ 0
+3V3_L
+Wire Wire Line
+	2150 2200 1750 2200
+Wire Wire Line
+	1750 2200 1750 1800
+Wire Wire Line
+	1750 1800 1500 1800
+Wire Wire Line
+	2250 2200 2250 2250
+Wire Wire Line
+	2250 2250 1700 2250
+Wire Wire Line
+	1700 2250 1700 1900
+Wire Wire Line
+	1700 1900 1500 1900
+Wire Wire Line
+	2350 2200 2350 2300
+Wire Wire Line
+	2350 2300 1650 2300
+Wire Wire Line
+	1650 2300 1650 2000
+Wire Wire Line
+	1650 2000 1500 2000
+Wire Wire Line
+	2650 2200 3050 2200
+Wire Wire Line
+	3050 2200 3050 1800
+Wire Wire Line
+	3050 1800 3300 1800
+Wire Wire Line
+	2550 2200 2550 2250
+Wire Wire Line
+	2550 2250 3100 2250
+Wire Wire Line
+	3100 2250 3100 1900
+Wire Wire Line
+	3100 1900 3300 1900
+Wire Wire Line
+	2450 2200 2450 2300
+Wire Wire Line
+	2450 2300 3150 2300
+Wire Wire Line
+	3150 2300 3150 2000
+Wire Wire Line
+	3150 2000 3300 2000
+$Comp
+L Device:R R?
+U 1 1 5ACCB59A
+P 1350 2600
+F 0 "R?" V 1350 2600 50  0000 C CNN
+F 1 "4k7" V 1250 2600 50  0000 C CNN
+F 2 "" V 1280 2600 50  0001 C CNN
+F 3 "~" H 1350 2600 50  0001 C CNN
+	1    1350 2600
+	0    1    1    0   
+$EndComp
+$Comp
+L Transistor_BJT:S8050 Q?
+U 1 1 5ACE71AD
+P 10450 2750
+F 0 "Q?" H 10641 2796 50  0000 L CNN
+F 1 "S8050" H 10641 2705 50  0000 L CNN
+F 2 "Package_TO_SOT_THT:TO-92_Inline" H 10650 2675 50  0001 L CIN
+F 3 "http://www.unisonic.com.tw/datasheet/S8050.pdf" H 10450 2750 50  0001 L CNN
+	1    10450 2750
+	1    0    0    -1  
+$EndComp
+$Comp
+L Transistor_BJT:S8050 Q?
+U 1 1 5ACE7237
+P 10450 3300
+F 0 "Q?" H 10641 3254 50  0000 L CNN
+F 1 "S8050" H 10641 3345 50  0000 L CNN
+F 2 "Package_TO_SOT_THT:TO-92_Inline" H 10650 3225 50  0001 L CIN
+F 3 "http://www.unisonic.com.tw/datasheet/S8050.pdf" H 10450 3300 50  0001 L CNN
+	1    10450 3300
+	1    0    0    1   
+$EndComp
+$Comp
+L Device:R RJ?
+U 1 1 5ACED60A
+P 5250 2650
+F 0 "RJ?" V 5250 2650 50  0000 C CNN
+F 1 "0" V 5300 2800 50  0000 C CNN
+F 2 "" V 5180 2650 50  0001 C CNN
+F 3 "~" H 5250 2650 50  0001 C CNN
+	1    5250 2650
+	0    1    1    0   
+$EndComp
+Wire Wire Line
+	5400 2650 5800 2650
+$Comp
+L Device:R RJ?
+U 1 1 5ACFEED1
+P 10400 2550
+F 0 "RJ?" V 10400 2550 50  0000 C CNN
+F 1 "0" V 10450 2700 50  0000 C CNN
+F 2 "" V 10330 2550 50  0001 C CNN
+F 3 "~" H 10400 2550 50  0001 C CNN
+	1    10400 2550
+	0    1    1    0   
+$EndComp
+Wire Wire Line
+	2600 3250 2950 3250
+Wire Wire Line
+	2950 3250 2950 3200
+Wire Wire Line
+	2600 2950 2650 2950
+$Comp
+L Device:R RJ?
+U 1 1 5ACA420D
+P 5250 2850
+F 0 "RJ?" V 5250 2850 50  0000 C CNN
+F 1 "0" V 5300 3000 50  0000 C CNN
+F 2 "" V 5180 2850 50  0001 C CNN
+F 3 "~" H 5250 2850 50  0001 C CNN
+	1    5250 2850
+	0    1    1    0   
+$EndComp
+Wire Wire Line
+	4850 2850 5100 2850
+Connection ~ 4850 2850
+Wire Wire Line
+	5400 2850 5800 2850
+Wire Wire Line
+	4800 1100 4950 1100
+Wire Wire Line
+	1500 3500 1750 3500
+Wire Wire Line
+	7600 2350 7850 2350
+Wire Wire Line
+	2650 2950 2650 3000
+Wire Wire Line
+	4750 1850 4850 1850
+Wire Wire Line
+	4800 1400 4950 1400
+Connection ~ 4950 1100
+Wire Wire Line
+	4950 1100 5100 1100
+Connection ~ 4950 1400
+Connection ~ 4850 1850
+Wire Wire Line
+	4850 1850 5100 1850
+Connection ~ 5100 1850
+Wire Wire Line
+	5100 1850 5350 1850
+Connection ~ 5350 1850
+Wire Wire Line
+	5350 1850 5600 1850
+Connection ~ 7850 2350
+Wire Wire Line
+	7850 2350 8050 2350
+Wire Wire Line
+	1750 3500 1850 3500
+Connection ~ 1750 3500
+Connection ~ 2950 3200
+Wire Wire Line
+	2650 3100 2650 3200
+Connection ~ 2650 3100
+Connection ~ 2950 3100
+Wire Wire Line
+	2650 3000 2650 3100
+Connection ~ 2650 3000
+Connection ~ 2950 3000
+$Comp
+L Connector_Specialized:Jack-DC J?
+U 1 1 5AD949BE
+P 4500 1200
+F 0 "J?" H 4578 1525 50  0000 C CNN
+F 1 "Jack-DC" H 4578 1434 50  0000 C CNN
+F 2 "" H 4550 1160 50  0001 C CNN
+F 3 "~" H 4550 1160 50  0001 C CNN
+	1    4500 1200
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	4800 1200 4800 1300
+Wire Wire Line
+	4800 1300 4800 1400
+Connection ~ 4800 1300
+Wire Wire Line
+	7600 2650 7600 2750
+Connection ~ 7600 2750
+$Comp
+L ESP8266:ESP-12E U?
+U 1 1 5ADAA1E6
+P 2400 1300
+F 0 "U?" H 2400 2065 50  0000 C CNN
+F 1 "ESP-12E" H 2400 1974 50  0000 C CNN
+F 2 "" H 2400 1300 50  0001 C CNN
+F 3 "http://l0l.org.uk/2014/12/esp8266-modules-hardware-guide-gotta-catch-em-all/" H 2400 1300 50  0001 C CNN
+	1    2400 1300
+	1    0    0    -1  
+$EndComp
+Connection ~ 1500 2800
+Connection ~ 2650 3500
+Connection ~ 9300 1250
+Wire Wire Line
+	1500 2600 1500 2800
+Text GLabel 1200 2600 0    50   Input ~ 0
+3V3_L
+Wire Wire Line
+	1500 2500 1500 2600
+Connection ~ 1500 2600
+Text GLabel 6650 5050 2    50   Input ~ 0
+3V3
+$Comp
+L Device:R R?
+U 1 1 5AF665E6
+P 6250 5250
+F 0 "R?" H 6320 5296 50  0000 L CNN
+F 1 "4k7" H 6320 5205 50  0000 L CNN
+F 2 "" V 6180 5250 50  0001 C CNN
+F 3 "~" H 6250 5250 50  0001 C CNN
+	1    6250 5250
+	0    1    1    0   
+$EndComp
+$Comp
+L MHRJJ66NFRA:MHRJJ66NFRA J?
+U 1 1 5AF93E8A
+P 5850 4850
+F 0 "J?" H 6250 5115 50  0000 C CNN
+F 1 "MHRJJ66NFRA" H 6250 5024 50  0000 C CNN
+F 2 "MHRJJ66NFRA" H 6500 4950 50  0001 L CNN
+F 3 "https://componentsearchengine.com/Datasheets/2/MHRJJ66NFRA.pdf" H 6500 4850 50  0001 L CNN
+F 4 "RJ12 6P6C right angled socket unshielded MH Connectors 6P6C Right Angle Through Hole Female Modular Socket UTP RJ12 Connector" H 6500 4750 50  0001 L CNN "Description"
+F 5 "" H 6500 4650 50  0001 L CNN "Height"
+F 6 "MH CONNECTORS" H 6500 4550 50  0001 L CNN "Manufacturer_Name"
+F 7 "MHRJJ66NFRA" H 6500 4450 50  0001 L CNN "Manufacturer_Part_Number"
+F 8 "8094898" H 6500 4350 50  0001 L CNN "RS Part Number"
+F 9 "http://uk.rs-online.com/web/p/products/8094898" H 6500 4250 50  0001 L CNN "RS Price/Stock"
+F 10 "MHRJJ66NFRA" H 6500 4150 50  0001 L CNN "Arrow Part Number"
+F 11 "http://uk.rs-online.com/web/p/products/8094898" H 6500 4050 50  0001 L CNN "Arrow Price/Stock"
+	1    5850 4850
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 5AF93F27
+P 5750 4950
+F 0 "#PWR?" H 5750 4700 50  0001 C CNN
+F 1 "GND" H 5755 4777 50  0000 C CNN
+F 2 "" H 5750 4950 50  0001 C CNN
+F 3 "" H 5750 4950 50  0001 C CNN
+	1    5750 4950
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5850 5050 5850 5250
+Wire Wire Line
+	5850 5250 6100 5250
+Wire Wire Line
+	6400 5250 6650 5250
+Wire Wire Line
+	6650 5250 6650 5050
+$Comp
+L MHRJJ66NFRA:MHRJJ66NFRA J?
+U 1 1 5AFA4115
+P 7250 4850
+F 0 "J?" H 7650 5115 50  0000 C CNN
+F 1 "MHRJJ66NFRA" H 7650 5024 50  0000 C CNN
+F 2 "MHRJJ66NFRA" H 7900 4950 50  0001 L CNN
+F 3 "https://componentsearchengine.com/Datasheets/2/MHRJJ66NFRA.pdf" H 7900 4850 50  0001 L CNN
+F 4 "RJ12 6P6C right angled socket unshielded MH Connectors 6P6C Right Angle Through Hole Female Modular Socket UTP RJ12 Connector" H 7900 4750 50  0001 L CNN "Description"
+F 5 "" H 7900 4650 50  0001 L CNN "Height"
+F 6 "MH CONNECTORS" H 7900 4550 50  0001 L CNN "Manufacturer_Name"
+F 7 "MHRJJ66NFRA" H 7900 4450 50  0001 L CNN "Manufacturer_Part_Number"
+F 8 "8094898" H 7900 4350 50  0001 L CNN "RS Part Number"
+F 9 "http://uk.rs-online.com/web/p/products/8094898" H 7900 4250 50  0001 L CNN "RS Price/Stock"
+F 10 "MHRJJ66NFRA" H 7900 4150 50  0001 L CNN "Arrow Part Number"
+F 11 "http://uk.rs-online.com/web/p/products/8094898" H 7900 4050 50  0001 L CNN "Arrow Price/Stock"
+	1    7250 4850
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 5AFA411B
+P 7150 4950
+F 0 "#PWR?" H 7150 4700 50  0001 C CNN
+F 1 "GND" H 7155 4777 50  0000 C CNN
+F 2 "" H 7150 4950 50  0001 C CNN
+F 3 "" H 7150 4950 50  0001 C CNN
+	1    7150 4950
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	7250 5050 7250 5250
+Wire Wire Line
+	7250 5250 7500 5250
+Wire Wire Line
+	7800 5250 8050 5250
+Wire Wire Line
+	8050 5250 8050 5050
+$Comp
+L MHRJJ66NFRA:MHRJJ66NFRA J?
+U 1 1 5AFA64CF
+P 8650 4850
+F 0 "J?" H 9050 5115 50  0000 C CNN
+F 1 "MHRJJ66NFRA" H 9050 5024 50  0000 C CNN
+F 2 "MHRJJ66NFRA" H 9300 4950 50  0001 L CNN
+F 3 "https://componentsearchengine.com/Datasheets/2/MHRJJ66NFRA.pdf" H 9300 4850 50  0001 L CNN
+F 4 "RJ12 6P6C right angled socket unshielded MH Connectors 6P6C Right Angle Through Hole Female Modular Socket UTP RJ12 Connector" H 9300 4750 50  0001 L CNN "Description"
+F 5 "" H 9300 4650 50  0001 L CNN "Height"
+F 6 "MH CONNECTORS" H 9300 4550 50  0001 L CNN "Manufacturer_Name"
+F 7 "MHRJJ66NFRA" H 9300 4450 50  0001 L CNN "Manufacturer_Part_Number"
+F 8 "8094898" H 9300 4350 50  0001 L CNN "RS Part Number"
+F 9 "http://uk.rs-online.com/web/p/products/8094898" H 9300 4250 50  0001 L CNN "RS Price/Stock"
+F 10 "MHRJJ66NFRA" H 9300 4150 50  0001 L CNN "Arrow Part Number"
+F 11 "http://uk.rs-online.com/web/p/products/8094898" H 9300 4050 50  0001 L CNN "Arrow Price/Stock"
+	1    8650 4850
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 5AFA64D5
+P 8550 4950
+F 0 "#PWR?" H 8550 4700 50  0001 C CNN
+F 1 "GND" H 8555 4777 50  0000 C CNN
+F 2 "" H 8550 4950 50  0001 C CNN
+F 3 "" H 8550 4950 50  0001 C CNN
+	1    8550 4950
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	8650 5050 8650 5250
+Wire Wire Line
+	8650 5250 8900 5250
+Wire Wire Line
+	9200 5250 9450 5250
+Wire Wire Line
+	9450 5250 9450 5050
+$Comp
+L MHRJJ66NFRA:MHRJJ66NFRA J?
+U 1 1 5AFA64F5
+P 10050 4850
+F 0 "J?" H 10450 5115 50  0000 C CNN
+F 1 "MHRJJ66NFRA" H 10450 5024 50  0000 C CNN
+F 2 "MHRJJ66NFRA" H 10700 4950 50  0001 L CNN
+F 3 "https://componentsearchengine.com/Datasheets/2/MHRJJ66NFRA.pdf" H 10700 4850 50  0001 L CNN
+F 4 "RJ12 6P6C right angled socket unshielded MH Connectors 6P6C Right Angle Through Hole Female Modular Socket UTP RJ12 Connector" H 10700 4750 50  0001 L CNN "Description"
+F 5 "" H 10700 4650 50  0001 L CNN "Height"
+F 6 "MH CONNECTORS" H 10700 4550 50  0001 L CNN "Manufacturer_Name"
+F 7 "MHRJJ66NFRA" H 10700 4450 50  0001 L CNN "Manufacturer_Part_Number"
+F 8 "8094898" H 10700 4350 50  0001 L CNN "RS Part Number"
+F 9 "http://uk.rs-online.com/web/p/products/8094898" H 10700 4250 50  0001 L CNN "RS Price/Stock"
+F 10 "MHRJJ66NFRA" H 10700 4150 50  0001 L CNN "Arrow Part Number"
+F 11 "http://uk.rs-online.com/web/p/products/8094898" H 10700 4050 50  0001 L CNN "Arrow Price/Stock"
+	1    10050 4850
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	10050 5050 10050 5250
+Wire Wire Line
+	10050 5250 10300 5250
+Wire Wire Line
+	10600 5250 10850 5250
+Wire Wire Line
+	10850 5250 10850 5050
+$Comp
+L MHRJJ66NFRA:MHRJJ66NFRA J?
+U 1 1 5AFA7E57
+P 5850 5800
+F 0 "J?" H 6250 6065 50  0000 C CNN
+F 1 "MHRJJ66NFRA" H 6250 5974 50  0000 C CNN
+F 2 "MHRJJ66NFRA" H 6500 5900 50  0001 L CNN
+F 3 "https://componentsearchengine.com/Datasheets/2/MHRJJ66NFRA.pdf" H 6500 5800 50  0001 L CNN
+F 4 "RJ12 6P6C right angled socket unshielded MH Connectors 6P6C Right Angle Through Hole Female Modular Socket UTP RJ12 Connector" H 6500 5700 50  0001 L CNN "Description"
+F 5 "" H 6500 5600 50  0001 L CNN "Height"
+F 6 "MH CONNECTORS" H 6500 5500 50  0001 L CNN "Manufacturer_Name"
+F 7 "MHRJJ66NFRA" H 6500 5400 50  0001 L CNN "Manufacturer_Part_Number"
+F 8 "8094898" H 6500 5300 50  0001 L CNN "RS Part Number"
+F 9 "http://uk.rs-online.com/web/p/products/8094898" H 6500 5200 50  0001 L CNN "RS Price/Stock"
+F 10 "MHRJJ66NFRA" H 6500 5100 50  0001 L CNN "Arrow Part Number"
+F 11 "http://uk.rs-online.com/web/p/products/8094898" H 6500 5000 50  0001 L CNN "Arrow Price/Stock"
+	1    5850 5800
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5850 6000 5850 6200
+Wire Wire Line
+	5850 6200 6100 6200
+Wire Wire Line
+	6400 6200 6650 6200
+Wire Wire Line
+	6650 6200 6650 6000
+$Comp
+L MHRJJ66NFRA:MHRJJ66NFRA J?
+U 1 1 5AFA7E7D
+P 7250 5800
+F 0 "J?" H 7650 6065 50  0000 C CNN
+F 1 "MHRJJ66NFRA" H 7650 5974 50  0000 C CNN
+F 2 "MHRJJ66NFRA" H 7900 5900 50  0001 L CNN
+F 3 "https://componentsearchengine.com/Datasheets/2/MHRJJ66NFRA.pdf" H 7900 5800 50  0001 L CNN
+F 4 "RJ12 6P6C right angled socket unshielded MH Connectors 6P6C Right Angle Through Hole Female Modular Socket UTP RJ12 Connector" H 7900 5700 50  0001 L CNN "Description"
+F 5 "" H 7900 5600 50  0001 L CNN "Height"
+F 6 "MH CONNECTORS" H 7900 5500 50  0001 L CNN "Manufacturer_Name"
+F 7 "MHRJJ66NFRA" H 7900 5400 50  0001 L CNN "Manufacturer_Part_Number"
+F 8 "8094898" H 7900 5300 50  0001 L CNN "RS Part Number"
+F 9 "http://uk.rs-online.com/web/p/products/8094898" H 7900 5200 50  0001 L CNN "RS Price/Stock"
+F 10 "MHRJJ66NFRA" H 7900 5100 50  0001 L CNN "Arrow Part Number"
+F 11 "http://uk.rs-online.com/web/p/products/8094898" H 7900 5000 50  0001 L CNN "Arrow Price/Stock"
+	1    7250 5800
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	7250 6000 7250 6200
+Wire Wire Line
+	7250 6200 7500 6200
+Wire Wire Line
+	7800 6200 8050 6200
+Wire Wire Line
+	8050 6200 8050 6000
+$Comp
+L MHRJJ66NFRA:MHRJJ66NFRA J?
+U 1 1 5AFA7EA1
+P 8650 5800
+F 0 "J?" H 9050 6065 50  0000 C CNN
+F 1 "MHRJJ66NFRA" H 9050 5974 50  0000 C CNN
+F 2 "MHRJJ66NFRA" H 9300 5900 50  0001 L CNN
+F 3 "https://componentsearchengine.com/Datasheets/2/MHRJJ66NFRA.pdf" H 9300 5800 50  0001 L CNN
+F 4 "RJ12 6P6C right angled socket unshielded MH Connectors 6P6C Right Angle Through Hole Female Modular Socket UTP RJ12 Connector" H 9300 5700 50  0001 L CNN "Description"
+F 5 "" H 9300 5600 50  0001 L CNN "Height"
+F 6 "MH CONNECTORS" H 9300 5500 50  0001 L CNN "Manufacturer_Name"
+F 7 "MHRJJ66NFRA" H 9300 5400 50  0001 L CNN "Manufacturer_Part_Number"
+F 8 "8094898" H 9300 5300 50  0001 L CNN "RS Part Number"
+F 9 "http://uk.rs-online.com/web/p/products/8094898" H 9300 5200 50  0001 L CNN "RS Price/Stock"
+F 10 "MHRJJ66NFRA" H 9300 5100 50  0001 L CNN "Arrow Part Number"
+F 11 "http://uk.rs-online.com/web/p/products/8094898" H 9300 5000 50  0001 L CNN "Arrow Price/Stock"
+	1    8650 5800
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	8650 6000 8650 6200
+Wire Wire Line
+	8650 6200 8900 6200
+Wire Wire Line
+	9200 6200 9450 6200
+Wire Wire Line
+	9450 6200 9450 6000
+$Comp
+L MHRJJ66NFRA:MHRJJ66NFRA J?
+U 1 1 5AFA7EC5
+P 10050 5800
+F 0 "J?" H 10450 6065 50  0000 C CNN
+F 1 "MHRJJ66NFRA" H 10450 5974 50  0000 C CNN
+F 2 "MHRJJ66NFRA" H 10700 5900 50  0001 L CNN
+F 3 "https://componentsearchengine.com/Datasheets/2/MHRJJ66NFRA.pdf" H 10700 5800 50  0001 L CNN
+F 4 "RJ12 6P6C right angled socket unshielded MH Connectors 6P6C Right Angle Through Hole Female Modular Socket UTP RJ12 Connector" H 10700 5700 50  0001 L CNN "Description"
+F 5 "" H 10700 5600 50  0001 L CNN "Height"
+F 6 "MH CONNECTORS" H 10700 5500 50  0001 L CNN "Manufacturer_Name"
+F 7 "MHRJJ66NFRA" H 10700 5400 50  0001 L CNN "Manufacturer_Part_Number"
+F 8 "8094898" H 10700 5300 50  0001 L CNN "RS Part Number"
+F 9 "http://uk.rs-online.com/web/p/products/8094898" H 10700 5200 50  0001 L CNN "RS Price/Stock"
+F 10 "MHRJJ66NFRA" H 10700 5100 50  0001 L CNN "Arrow Part Number"
+F 11 "http://uk.rs-online.com/web/p/products/8094898" H 10700 5000 50  0001 L CNN "Arrow Price/Stock"
+	1    10050 5800
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	10050 6000 10050 6200
+Wire Wire Line
+	10050 6200 10300 6200
+Wire Wire Line
+	10600 6200 10850 6200
+Wire Wire Line
+	10850 6200 10850 6000
+$Comp
+L Device:R R?
+U 1 1 5AFC833D
+P 7650 5250
+F 0 "R?" H 7720 5296 50  0000 L CNN
+F 1 "4k7" H 7720 5205 50  0000 L CNN
+F 2 "" V 7580 5250 50  0001 C CNN
+F 3 "~" H 7650 5250 50  0001 C CNN
+	1    7650 5250
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5AFC83A7
+P 9050 5250
+F 0 "R?" H 9120 5296 50  0000 L CNN
+F 1 "4k7" H 9120 5205 50  0000 L CNN
+F 2 "" V 8980 5250 50  0001 C CNN
+F 3 "~" H 9050 5250 50  0001 C CNN
+	1    9050 5250
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5AFC8409
+P 10450 5250
+F 0 "R?" H 10520 5296 50  0000 L CNN
+F 1 "4k7" H 10520 5205 50  0000 L CNN
+F 2 "" V 10380 5250 50  0001 C CNN
+F 3 "~" H 10450 5250 50  0001 C CNN
+	1    10450 5250
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5AFC8481
+P 6250 6200
+F 0 "R?" H 6320 6246 50  0000 L CNN
+F 1 "4k7" H 6320 6155 50  0000 L CNN
+F 2 "" V 6180 6200 50  0001 C CNN
+F 3 "~" H 6250 6200 50  0001 C CNN
+	1    6250 6200
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5AFC84FB
+P 7650 6200
+F 0 "R?" H 7720 6246 50  0000 L CNN
+F 1 "4k7" H 7720 6155 50  0000 L CNN
+F 2 "" V 7580 6200 50  0001 C CNN
+F 3 "~" H 7650 6200 50  0001 C CNN
+	1    7650 6200
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5AFC8577
+P 10450 6200
+F 0 "R?" H 10520 6246 50  0000 L CNN
+F 1 "4k7" H 10520 6155 50  0000 L CNN
+F 2 "" V 10380 6200 50  0001 C CNN
+F 3 "~" H 10450 6200 50  0001 C CNN
+	1    10450 6200
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5AFC8645
+P 9050 6200
+F 0 "R?" H 9120 6246 50  0000 L CNN
+F 1 "4k7" H 9120 6155 50  0000 L CNN
+F 2 "" V 8980 6200 50  0001 C CNN
+F 3 "~" H 9050 6200 50  0001 C CNN
+	1    9050 6200
+	0    1    1    0   
+$EndComp
+Wire Wire Line
+	5750 4950 5850 4950
+Wire Wire Line
+	7150 4950 7250 4950
+Wire Wire Line
+	8550 4950 8650 4950
+$Comp
+L power:GND #PWR?
+U 1 1 5AF951DB
+P 9950 4950
+F 0 "#PWR?" H 9950 4700 50  0001 C CNN
+F 1 "GND" H 9955 4777 50  0000 C CNN
+F 2 "" H 9950 4950 50  0001 C CNN
+F 3 "" H 9950 4950 50  0001 C CNN
+	1    9950 4950
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	9950 4950 10050 4950
+$Comp
+L power:GND #PWR?
+U 1 1 5AF982BE
+P 5750 5900
+F 0 "#PWR?" H 5750 5650 50  0001 C CNN
+F 1 "GND" H 5755 5727 50  0000 C CNN
+F 2 "" H 5750 5900 50  0001 C CNN
+F 3 "" H 5750 5900 50  0001 C CNN
+	1    5750 5900
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5750 5900 5850 5900
+$Comp
+L power:GND #PWR?
+U 1 1 5AF9B49C
+P 7150 5900
+F 0 "#PWR?" H 7150 5650 50  0001 C CNN
+F 1 "GND" H 7155 5727 50  0000 C CNN
+F 2 "" H 7150 5900 50  0001 C CNN
+F 3 "" H 7150 5900 50  0001 C CNN
+	1    7150 5900
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	7150 5900 7250 5900
+$Comp
+L power:GND #PWR?
+U 1 1 5AF9EBD5
+P 8550 5900
+F 0 "#PWR?" H 8550 5650 50  0001 C CNN
+F 1 "GND" H 8555 5727 50  0000 C CNN
+F 2 "" H 8550 5900 50  0001 C CNN
+F 3 "" H 8550 5900 50  0001 C CNN
+	1    8550 5900
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	8550 5900 8650 5900
+$Comp
+L power:GND #PWR?
+U 1 1 5AFA1EA7
+P 9950 5900
+F 0 "#PWR?" H 9950 5650 50  0001 C CNN
+F 1 "GND" H 9955 5727 50  0000 C CNN
+F 2 "" H 9950 5900 50  0001 C CNN
+F 3 "" H 9950 5900 50  0001 C CNN
+	1    9950 5900
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	9950 5900 10050 5900
+$Comp
+L power:GND #PWR?
+U 1 1 5AFABC81
+P 6650 4850
+F 0 "#PWR?" H 6650 4600 50  0001 C CNN
+F 1 "GND" H 6655 4677 50  0000 C CNN
+F 2 "" H 6650 4850 50  0001 C CNN
+F 3 "" H 6650 4850 50  0001 C CNN
+	1    6650 4850
+	-1   0    0    1   
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 5B06601C
+P 6550 1200
+F 0 "#PWR?" H 6550 950 50  0001 C CNN
+F 1 "GND" V 6555 1027 50  0000 C CNN
+F 2 "" H 6550 1200 50  0001 C CNN
+F 3 "" H 6550 1200 50  0001 C CNN
+	1    6550 1200
+	0    -1   -1   0   
+$EndComp
+Text GLabel 7700 1100 2    50   Input ~ 0
+3V3
+$Comp
+L Device:R R?
+U 1 1 5B08A8A2
+P 4850 6550
+F 0 "R?" V 4850 6900 50  0000 C CNN
+F 1 "33k" V 4850 7050 50  0000 C CNN
+F 2 "" V 4780 6550 50  0001 C CNN
+F 3 "~" H 4850 6550 50  0001 C CNN
+	1    4850 6550
+	0    -1   -1   0   
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 5B08E015
+P 4700 7300
+F 0 "#PWR?" H 4700 7050 50  0001 C CNN
+F 1 "GND" H 4705 7127 50  0000 C CNN
+F 2 "" H 4700 7300 50  0001 C CNN
+F 3 "" H 4700 7300 50  0001 C CNN
+	1    4700 7300
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:Fuse F?
+U 1 1 5B0ABB62
+P 7550 1100
+F 0 "F?" V 7353 1100 50  0000 C CNN
+F 1 "500mA" V 7444 1100 50  0000 C CNN
+F 2 "" V 7480 1100 50  0001 C CNN
+F 3 "~" H 7550 1100 50  0001 C CNN
+	1    7550 1100
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5B075ADF
+P 4850 6650
+F 0 "R?" V 4850 7000 50  0000 C CNN
+F 1 "33k" V 4850 7150 50  0000 C CNN
+F 2 "" V 4780 6650 50  0001 C CNN
+F 3 "~" H 4850 6650 50  0001 C CNN
+	1    4850 6650
+	0    -1   -1   0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5B075B27
+P 4850 6750
+F 0 "R?" V 4850 7100 50  0000 C CNN
+F 1 "33k" V 4850 7250 50  0000 C CNN
+F 2 "" V 4780 6750 50  0001 C CNN
+F 3 "~" H 4850 6750 50  0001 C CNN
+	1    4850 6750
+	0    -1   -1   0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5B075B6D
+P 4850 6850
+F 0 "R?" V 4850 7200 50  0000 C CNN
+F 1 "33k" V 4850 7350 50  0000 C CNN
+F 2 "" V 4780 6850 50  0001 C CNN
+F 3 "~" H 4850 6850 50  0001 C CNN
+	1    4850 6850
+	0    -1   -1   0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5B075BB5
+P 4850 6950
+F 0 "R?" V 4850 7300 50  0000 C CNN
+F 1 "33k" V 4850 7450 50  0000 C CNN
+F 2 "" V 4780 6950 50  0001 C CNN
+F 3 "~" H 4850 6950 50  0001 C CNN
+	1    4850 6950
+	0    -1   -1   0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5B075BFF
+P 4850 7050
+F 0 "R?" V 4850 7400 50  0000 C CNN
+F 1 "33k" V 4850 7550 50  0000 C CNN
+F 2 "" V 4780 7050 50  0001 C CNN
+F 3 "~" H 4850 7050 50  0001 C CNN
+	1    4850 7050
+	0    -1   -1   0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5B075C4B
+P 4850 7150
+F 0 "R?" V 4850 7500 50  0000 C CNN
+F 1 "33k" V 4850 7650 50  0000 C CNN
+F 2 "" V 4780 7150 50  0001 C CNN
+F 3 "~" H 4850 7150 50  0001 C CNN
+	1    4850 7150
+	0    -1   -1   0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5B075C99
+P 4850 7250
+F 0 "R?" V 4850 7600 50  0000 C CNN
+F 1 "33k" V 4850 7750 50  0000 C CNN
+F 2 "" V 4780 7250 50  0001 C CNN
+F 3 "~" H 4850 7250 50  0001 C CNN
+	1    4850 7250
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	4700 7150 4700 7250
+Connection ~ 4700 7150
+Wire Wire Line
+	4700 7050 4700 7150
+Connection ~ 4700 7050
+Wire Wire Line
+	4700 6950 4700 7050
+Connection ~ 4700 6950
+Wire Wire Line
+	4700 6850 4700 6950
+Connection ~ 4700 6850
+Wire Wire Line
+	4700 6750 4700 6850
+Connection ~ 4700 6750
+Wire Wire Line
+	4700 6650 4700 6750
+Connection ~ 4700 6650
+Wire Wire Line
+	4700 6550 4700 6650
+Text GLabel 2050 4550 2    50   Input ~ 0
+3V3_L
+$Comp
+L power:GND #PWR?
+U 1 1 5B3B302D
+P 1950 7550
+F 0 "#PWR?" H 1950 7300 50  0001 C CNN
+F 1 "GND" H 1955 7377 50  0000 C CNN
+F 2 "" H 1950 7550 50  0001 C CNN
+F 3 "" H 1950 7550 50  0001 C CNN
+	1    1950 7550
+	1    0    0    -1  
+$EndComp
+Text GLabel 2550 4950 2    50   Input ~ 0
+mux_p_3
+Text GLabel 2550 4850 2    50   Input ~ 0
+mux_p_4
+Text GLabel 2550 7250 2    50   Input ~ 0
+mux_p_5
+Text GLabel 2550 7150 2    50   Input ~ 0
+mux_p_6
+Text GLabel 2550 7050 2    50   Input ~ 0
+mux_p_7
+Text GLabel 2550 5250 2    50   Input ~ 0
+mux_p_0
+Text GLabel 2550 5150 2    50   Input ~ 0
+mux_p_1
+Text GLabel 2550 5050 2    50   Input ~ 0
+mux_p_2
+Text GLabel 2550 6150 2    50   Input ~ 0
+SDA
+Text GLabel 2550 6250 2    50   Input ~ 0
+SCL
+$Comp
+L Device:R R?
+U 1 1 5B3B44F9
+P 2700 6350
+F 0 "R?" V 2800 6350 50  0000 C CNN
+F 1 "10k" V 2900 6350 50  0000 C CNN
+F 2 "" V 2630 6350 50  0001 C CNN
+F 3 "~" H 2700 6350 50  0001 C CNN
+	1    2700 6350
+	0    1    1    0   
+$EndComp
+Text GLabel 8050 5050 2    50   Input ~ 0
+3V3
+$Comp
+L power:GND #PWR?
+U 1 1 5B4137E3
+P 8050 4850
+F 0 "#PWR?" H 8050 4600 50  0001 C CNN
+F 1 "GND" H 8055 4677 50  0000 C CNN
+F 2 "" H 8050 4850 50  0001 C CNN
+F 3 "" H 8050 4850 50  0001 C CNN
+	1    8050 4850
+	-1   0    0    1   
+$EndComp
+Text GLabel 9450 5050 2    50   Input ~ 0
+3V3
+$Comp
+L power:GND #PWR?
+U 1 1 5B418C4D
+P 9450 4850
+F 0 "#PWR?" H 9450 4600 50  0001 C CNN
+F 1 "GND" H 9455 4677 50  0000 C CNN
+F 2 "" H 9450 4850 50  0001 C CNN
+F 3 "" H 9450 4850 50  0001 C CNN
+	1    9450 4850
+	-1   0    0    1   
+$EndComp
+Text GLabel 10850 5050 2    50   Input ~ 0
+3V3
+$Comp
+L power:GND #PWR?
+U 1 1 5B426029
+P 10850 4850
+F 0 "#PWR?" H 10850 4600 50  0001 C CNN
+F 1 "GND" H 10855 4677 50  0000 C CNN
+F 2 "" H 10850 4850 50  0001 C CNN
+F 3 "" H 10850 4850 50  0001 C CNN
+	1    10850 4850
+	-1   0    0    1   
+$EndComp
+Text GLabel 6650 6000 2    50   Input ~ 0
+3V3
+$Comp
+L power:GND #PWR?
+U 1 1 5B439115
+P 6650 5800
+F 0 "#PWR?" H 6650 5550 50  0001 C CNN
+F 1 "GND" H 6655 5627 50  0000 C CNN
+F 2 "" H 6650 5800 50  0001 C CNN
+F 3 "" H 6650 5800 50  0001 C CNN
+	1    6650 5800
+	-1   0    0    1   
+$EndComp
+Text GLabel 10850 6000 2    50   Input ~ 0
+3V3
+$Comp
+L power:GND #PWR?
+U 1 1 5B443AAB
+P 10850 5800
+F 0 "#PWR?" H 10850 5550 50  0001 C CNN
+F 1 "GND" H 10855 5627 50  0000 C CNN
+F 2 "" H 10850 5800 50  0001 C CNN
+F 3 "" H 10850 5800 50  0001 C CNN
+	1    10850 5800
+	-1   0    0    1   
+$EndComp
+Text GLabel 9450 6000 2    50   Input ~ 0
+3V3
+$Comp
+L power:GND #PWR?
+U 1 1 5B448DA5
+P 9450 5800
+F 0 "#PWR?" H 9450 5550 50  0001 C CNN
+F 1 "GND" H 9455 5627 50  0000 C CNN
+F 2 "" H 9450 5800 50  0001 C CNN
+F 3 "" H 9450 5800 50  0001 C CNN
+	1    9450 5800
+	-1   0    0    1   
+$EndComp
+Text GLabel 8050 6000 2    50   Input ~ 0
+3V3
+$Comp
+L power:GND #PWR?
+U 1 1 5B4594A2
+P 8050 5800
+F 0 "#PWR?" H 8050 5550 50  0001 C CNN
+F 1 "GND" H 8055 5627 50  0000 C CNN
+F 2 "" H 8050 5800 50  0001 C CNN
+F 3 "" H 8050 5800 50  0001 C CNN
+	1    8050 5800
+	-1   0    0    1   
+$EndComp
+$Comp
+L MCU_Microchip_ATmega:ATmega328P-AU U?
+U 1 1 5B47C124
+P 1950 6050
+F 0 "U?" H 1950 6100 50  0000 C CNN
+F 1 "ATmega328P-AU" H 1950 6000 50  0000 C CNN
+F 2 "Package_QFP:TQFP-32_7x7mm_P0.8mm" H 1950 6050 50  0001 C CIN
+F 3 "http://ww1.microchip.com/downloads/en/DeviceDoc/atmel-8271-8-bit-avr-microcontroller-atmega48a-48pa-88a-88pa-168a-168pa-328-328p_datasheet.pdf" H 1950 6050 50  0001 C CNN
+	1    1950 6050
+	1    0    0    -1  
+$EndComp
+Text GLabel 6800 950  2    50   Input ~ 0
+3V3_L
+Text GLabel 2850 6350 2    50   Input ~ 0
+3V3_L
+$Comp
+L Connector_Generic:Conn_01x04 J?
+U 1 1 5B491CA8
+P 3400 5000
+F 0 "J?" H 3480 4992 50  0000 L CNN
+F 1 "ATmega Prog" H 3480 4901 50  0000 L CNN
+F 2 "" H 3400 5000 50  0001 C CNN
+F 3 "~" H 3400 5000 50  0001 C CNN
+	1    3400 5000
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	2550 5250 2550 5200
+Wire Wire Line
+	2550 5150 2550 5100
+Wire Wire Line
+	2550 5050 2550 5000
+$Comp
+L power:GND #PWR?
+U 1 1 5B499B0C
+P 3200 4900
+F 0 "#PWR?" H 3200 4650 50  0001 C CNN
+F 1 "GND" V 3200 4700 50  0000 C CNN
+F 2 "" H 3200 4900 50  0001 C CNN
+F 3 "" H 3200 4900 50  0001 C CNN
+	1    3200 4900
+	0    1    1    0   
+$EndComp
+$Comp
+L Connector_Specialized:Conn_01x04_Male J?
+U 1 1 5B3BDD3F
+P 6350 1200
+F 0 "J?" H 6456 1478 50  0000 C CNN
+F 1 "Power Regulator" H 6456 1387 50  0000 C CNN
+F 2 "" H 6350 1200 50  0001 C CNN
+F 3 "~" H 6350 1200 50  0001 C CNN
+	1    6350 1200
+	1    0    0    -1  
+$EndComp
+Text GLabel 6850 1300 2    50   Input ~ 0
+Vin
+$Comp
+L Device:R R?
+U 1 1 5B3CA5CE
+P 6700 1400
+F 0 "R?" V 6600 1400 50  0000 C CNN
+F 1 "100k" V 6500 1400 50  0000 C CNN
+F 2 "" V 6630 1400 50  0001 C CNN
+F 3 "~" H 6700 1400 50  0001 C CNN
+	1    6700 1400
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	6550 1300 6850 1300
+Wire Wire Line
+	6850 1300 6850 1400
+Text GLabel 2550 6050 2    50   Input ~ 0
+!Lock
+Wire Wire Line
+	1950 4550 2050 4550
+Wire Wire Line
+	4700 2550 5800 2550
+Wire Wire Line
+	4700 2650 5100 2650
+Connection ~ 5100 2650
+Connection ~ 5400 1400
+Connection ~ 5400 1100
+Wire Wire Line
+	4950 1400 5400 1400
+Wire Wire Line
+	5400 1100 5700 1100
+Text GLabel 5700 1100 2    50   Input ~ 0
+Vin
+Wire Wire Line
+	6550 1100 6800 1100
+Wire Wire Line
+	6800 1100 6800 950 
+Wire Wire Line
+	6800 1100 7150 1100
+Connection ~ 6800 1100
+Connection ~ 7400 1100
+Connection ~ 7150 1100
+Wire Wire Line
+	7150 1100 7400 1100
+$Comp
+L power:GND #PWR?
+U 1 1 5B5A3F19
+P 7300 1400
+F 0 "#PWR?" H 7300 1150 50  0001 C CNN
+F 1 "GND" H 7305 1227 50  0000 C CNN
+F 2 "" H 7300 1400 50  0001 C CNN
+F 3 "" H 7300 1400 50  0001 C CNN
+	1    7300 1400
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	7150 1400 7300 1400
+Connection ~ 7300 1400
+Wire Wire Line
+	7300 1400 7400 1400
+Wire Wire Line
+	5400 1400 5700 1400
+Text GLabel 4700 2550 0    50   Input ~ 0
+3V3_L
+Text GLabel 2600 3250 0    50   Input ~ 0
+!Lock
+Wire Wire Line
+	4700 7250 4700 7300
+Connection ~ 4700 7250
+Wire Wire Line
+	2550 5000 3200 5000
+Wire Wire Line
+	2550 5100 3200 5100
+Wire Wire Line
+	2550 5200 3200 5200
+Text GLabel 5400 6600 0    50   Input ~ 0
+mux_p_1
+Text GLabel 5400 6700 0    50   Input ~ 0
+mux_p_2
+Text GLabel 5400 6900 0    50   Input ~ 0
+mux_p_4
+Text GLabel 5400 6800 0    50   Input ~ 0
+mux_p_3
+Text GLabel 5400 7000 0    50   Input ~ 0
+mux_p_5
+Text GLabel 5400 7100 0    50   Input ~ 0
+mux_p_6
+Text GLabel 5400 7200 0    50   Input ~ 0
+mux_p_7
+Wire Wire Line
+	5400 6550 5400 6500
+Wire Wire Line
+	5000 6550 5400 6550
+Wire Wire Line
+	5400 6600 5400 6650
+Wire Wire Line
+	5000 6650 5400 6650
+Wire Wire Line
+	5400 6750 5400 6700
+Wire Wire Line
+	5000 6750 5400 6750
+Wire Wire Line
+	5000 6850 5400 6850
+Wire Wire Line
+	5400 6850 5400 6800
+Wire Wire Line
+	5400 6950 5400 6900
+Wire Wire Line
+	5000 6950 5400 6950
+Wire Wire Line
+	5400 7050 5400 7000
+Wire Wire Line
+	5000 7050 5400 7050
+Wire Wire Line
+	5400 7150 5400 7100
+Wire Wire Line
+	5000 7150 5400 7150
+Wire Wire Line
+	5400 7250 5400 7200
+Wire Wire Line
+	5000 7250 5400 7250
+Text GLabel 5850 4850 0    50   Input ~ 0
+mux_p_0
+Text GLabel 5400 6500 0    50   Input ~ 0
+mux_p_0
+Text GLabel 7250 4850 0    50   Input ~ 0
+mux_p_1
+Text GLabel 8650 4850 0    50   Input ~ 0
+mux_p_2
+Text GLabel 10050 4850 0    50   Input ~ 0
+mux_p_3
+Text GLabel 10050 5800 0    50   Input ~ 0
+mux_p_7
+Text GLabel 8650 5800 0    50   Input ~ 0
+mux_p_6
+Text GLabel 7250 5800 0    50   Input ~ 0
+mux_p_5
+Text GLabel 5850 5800 0    50   Input ~ 0
+mux_p_4
+$EndSCHEMATC

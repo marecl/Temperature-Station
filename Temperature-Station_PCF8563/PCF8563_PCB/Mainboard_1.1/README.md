@@ -1,3 +1,4 @@
 First version.
 Single sided.
-Untested (but solved previous issues of previous design)
+Requires retracing some SD lines which were connected to GPIO9&10.
+No i2c breakout.

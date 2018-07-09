@@ -1,6 +1,6 @@
 Muxtemp	KEYWORD1
 begin	KEYWORD2
-refreshPorts	KEYWORD2
+refresh	KEYWORD2
 getPorts	KEYWORD2
 getTemp	KEYWORD2
 getCount	KEYWORD2

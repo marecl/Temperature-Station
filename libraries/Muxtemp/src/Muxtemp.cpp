@@ -1,14 +1,5 @@
 #include "Muxtemp.h"
 
-/*
-   0x75 - refresh sensors
-   0x78 - send connected sensors
-   0x81[N] - sensor address from port N (only when 1wire bypass is not used!)
-   0x84[N] - send measurement from port N
-   0x87 - get port count
-   0x90 - is 1wire bypassed
-*/
-
 Muxtemp::Muxtemp(TwoWire &_W, uint8_t _a) {
   this->_Wire = &_W;
   this->_addr = _a;
@@ -18,6 +9,7 @@ Muxtemp::Muxtemp(TwoWire &_W, uint8_t _a) {
 }
 
 Muxtemp::~Muxtemp() {
+  delete[] _sensors;
 }
 
 uint8_t Muxtemp::begin() {
@@ -41,7 +33,7 @@ uint8_t Muxtemp::getCount() {
   return this->_count;
 }
 
-void Muxtemp::refreshPorts() {
+void Muxtemp::refresh() {
   _Wire->beginTransmission(this->_addr);
   _Wire->write(MUXTEMP_REFRESH);
   _Wire->endTransmission();
@@ -66,7 +58,7 @@ float Muxtemp::getTemp(uint8_t _p) {
     char t = _Wire->read();
     if (t == 255) continue;
     else r += t;
-  }
+    }
   return atof(r.c_str());
 }
 
@@ -97,7 +89,7 @@ uint8_t *Muxtemp::getAddress(uint8_t _p) {
   _Wire->requestFrom(this->_addr, 8);
   for (uint8_t s = 0; s < 8; s++)
     _a[s] = _Wire->read();
-  return _a;
+  return &_a[0];
 }
 
 bool Muxtemp::bypass1Wire() {

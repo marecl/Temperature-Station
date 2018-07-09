@@ -1,14 +1,22 @@
+/*
+  Library which is made to hold all settings of Temperature Station
+  There is no way (I know) to make it return passwords / other sensitive data
+*/
+
+/*
+  Insecure, uncomment only for debugging
+  Will show every action in settingsHandler including passwords
+*/
+//#define S_DEBUG
+
 class settingsHandler {
   public:
     settingsHandler();
     ~settingsHandler();
-    void serialDebug(HardwareSerial*);
     void save(const char*);
     bool load(const char*);
     void config(const char*, const char*);
     void configAP(const char*, const char*);
-    const char* ssid();
-    const char* ssidAP();
     void ssid(const char*);
     void ssidAP(const char*);
     void configIP(IPAddress, IPAddress, IPAddress);
@@ -16,25 +24,34 @@ class settingsHandler {
     void useDHCP(bool);
     bool useDHCP();
     void name(const char*);
-    const char* name();
     void configUser(const char*, const char*);
-    const char* username();
     bool authenticate(const char*, const char*);
     bool beginWiFi();
     bool beginAP();
+    void ntpServer(const char*);
     void configUpdateServer(ESP8266WebServer*, ESP8266HTTPUpdateServer*, const char*);
+    void beginOTA(uint16_t = 8266);
     bool webAuthenticate(ESP8266WebServer*);
     bool reset(const char*, const char*, const char*);
     IPAddress localIP();
     IPAddress gatewayIP();
     IPAddress subnetMask();
     bool useNTP;
+    const char* ssid();
+    const char* ssidAP();
+    const char* name();
+    const char* username();
     const char* ntpServer();
-    void ntpServer(const char*);
     uint32_t lastUpdate;
-    short int timezone;
+    int8_t timezone;
+    String IPtoString(IPAddress);
+    IPAddress stringToIP(const char*);
+#ifdef S_DEBUG
+    void serialDebug(HardwareSerial*);
+#endif
 
   private:
+    void setField(char*, const char*, uint8_t);
     char* _name;
     char* _ssid;
     char* _pass;
@@ -47,7 +64,7 @@ class settingsHandler {
     IPAddress _ip;
     IPAddress _gw;
     IPAddress _mask;
-    IPAddress stringToIP(const char*);
+#ifdef S_DEBUG
     HardwareSerial *_debug;
-    void setField(char*, const char*, uint8_t);
+#endif
 };
