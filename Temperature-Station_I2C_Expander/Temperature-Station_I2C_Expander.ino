@@ -3,17 +3,11 @@
 #include <OneWire.h>
 #include <Wire.h>
 
-#define F_CPU 8000000L
-#define N_PORTS 7//8
-//#define DEBUG
-
 /*
    Use Arduino Pro Mini 3V3 bootloader and internal 8MHz clock
    Change BOD detection to 1.8V (2.8V if you're not experiencing resets)
 
-   ToDo: 1wire jumpers (global rail interferes with searching)
-   When bypassing - add jumpers
-   No bypass - every 1wire device with separate circuit!
+   This sketch will fit into ATmega328/168
 
    0x75 - probe sensors
    0x78 - send connected sensors
@@ -21,11 +15,30 @@
    0x84[N] - send measurement from port N
    0x87 - get port count
    0x90 - is 1wire bypassed
+
+   Types:
+      0 - not connected
+      1 - connected, not recognized
+      11/21/22 - DHTxx
+      40 - DS18B20 (or from the same device family)
 */
 
+/* Address */
+#define I2C_ADDR 0x10
+
+/* Misc config */
+#define F_CPU 8000000L
+#define N_PORTS 8
+
+/* Pins 8 */
+#define LOCK_P A3
+#define BYPASS_P A2
+
+/* Uncomment when debugging */
+//#define DEBUG
+
 /* Pins, temperatures, saved ports */
-const uint8_t address = 0x10;
-const uint8_t _pins[N_PORTS] = {5, 6, 7, 8, 9, 10, 11, /*12*/};
+const uint8_t _pins[N_PORTS] = {5, 6, 7, 8, 9, 10, 11, 12};
 static double _temps[N_PORTS];  //Readings
 static uint8_t _ports[N_PORTS]; //Socket status
 static uint8_t _addr[N_PORTS][8]; //1wire address
@@ -34,24 +47,23 @@ volatile uint8_t command, reqport; //Command and requested port
 bool bypass1Wire = false; //Should it avoid using 1wire
 uint8_t toSend = 0; //Part of NULL solution
 
-/*
-    0 - no
-    1 - not recognized
-    5 - 1wire
-    11/21/22 - DHT
-*/
-
 void setup() {
+  pinMode(LOCK_P, OUTPUT);
+
+  //Preamble to distinguish reboot from normal work
+  for (uint8_t _s = 0; _s < 255; _s++) {
+    digitalWrite(LOCK_P, HIGH);
+    digitalWrite(LOCK_P, LOW);
+  }
+
   /*
     For this option to work:
-      No bypass: cut all 1wire jumpers out from connectors, solder A3 jumper
+      No bypass: cut all 1wire jumpers out from connectors, solder A2 jumper
       Bypass: Connect all jumpers, desolder A3 jumper
       Or just move everything to DEFINE, whatever
-    Added 'lock' or diode output when refreshing. 
-    Use it as debug or "not yet" pin.
   */
-  pinMode(A3, INPUT_PULLUP);
-  if (digitalRead(A3))
+  pinMode(BYPASS_P, INPUT_PULLUP);
+  if (digitalRead(BYPASS_P))
     bypass1Wire = true;
 
   //Quick look if it's reading sensors correctly
@@ -59,7 +71,7 @@ void setup() {
   Serial.begin(115200);
   Serial.println(F("\r\nI2C Expander Debug"));
   Serial.print(F("Address: 0x"));
-  Serial.println(address, HEX);
+  Serial.println(I2C_ADDR, HEX);
   Serial.print(F("Ports: "));
   Serial.println(N_PORTS);
   Serial.print(F("1wire bypass: "));
@@ -80,9 +92,10 @@ void setup() {
   }
 #endif
 
-  Wire.begin(address);
+  Wire.begin(I2C_ADDR);
   Wire.onRequest(requestEvent);
   Wire.onReceive(receiveEvent);
+  digitalWrite(LOCK_P, HIGH); //Ready to work
 }
 
 void loop() {
@@ -116,6 +129,7 @@ void loop() {
     }
     command = 0;
     reqport = 0;
+    digitalWrite(LOCK_P, HIGH); //Command done, unlock
   }
 }
 
@@ -126,22 +140,21 @@ void requestEvent() {
 }
 
 void receiveEvent(int numBytes) {
+  digitalWrite(LOCK_P, LOW); //Receiving command, lock
   if (numBytes == 1)
     command = Wire.read();
   else if (numBytes == 2) {
     command = Wire.read();
     reqport = Wire.read();
-  }
+  } else digitalWrite(LOCK_P, HIGH);
   return void();
 }
 
 void refreshPorts() { //Detect if ports are used
-  digitalWrite(13, HIGH);
-  const uint8_t _t[3] = {11, 21, 22};
   for (uint8_t a = 0; a < N_PORTS; a++) {
     //Setup for detecting plugged sensors
-    digitalWrite(_pins[a], LOW);
     pinMode(_pins[a], INPUT);
+    digitalWrite(_pins[a], LOW);
 
     if (!digitalRead(_pins[a])) {
       _ports[a] = 0; //NOT connected
@@ -160,22 +173,23 @@ void refreshPorts() { //Detect if ports are used
         _temps[a] = sensors.getTempC(_s);
         for (uint8_t _a = 0; _a < 8; _a++)
           _addr[a][_a] = _s[_a];
-        _ports[a] = 5;
+        _ports[a] = 40; //Always first byte of DS18B20 address
         continue;
       }
     }
 
     for (int z = 0; z < 3; z++) { //Just try all possibilities
+      const uint8_t _t[3] = {11, 21, 22}; //DHTxx
+      double b;
       DHT dht(_pins[a], _t[z]);
       dht.begin();
-      double b = dht.readTemperature();
-      if (!isnan(b) && b < 200) {
+      b = dht.readTemperature();
+      if (!isnan(b) && b < 85) {
         _ports[a] = _t[z];
         _temps[a] = b; //We already have correct temperature
         break;
       }
     }
   }
-  digitalWrite(13, LOW);
   return void();
 }

@@ -6,14 +6,6 @@
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 #define SETTINGS_FILE (char*)"SETTINGS.TXT"
 
-static const uint8_t rsakey[] PROGMEM = {
-#include "key.h"
-};
-
-static const uint8_t x509[] PROGMEM = {
-#include "x509.h"
-};
-
 void bootFailHandler(int _code) {
   switch (_code) {
     default: return;

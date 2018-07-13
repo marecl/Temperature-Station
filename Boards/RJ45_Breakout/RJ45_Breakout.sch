@@ -1072,36 +1072,40 @@ $EndComp
 $Comp
 L Device:Jumper_NO_Small JP1
 U 1 1 5B11B726
-P 9600 3100
-F 0 "JP1" H 9750 3300 50  0000 C CNN
-F 1 "bypass1Wire" H 9750 3200 50  0000 C CNN
-F 2 "Resistor_SMD:R_0805_2012Metric_Pad1.15x1.50mm_HandSolder" H 9600 3100 50  0001 C CNN
-F 3 "~" H 9600 3100 50  0001 C CNN
-	1    9600 3100
+P 9600 3000
+F 0 "JP1" H 9750 3200 50  0000 C CNN
+F 1 "bypass1Wire" H 9750 3100 50  0000 C CNN
+F 2 "Resistor_SMD:R_0805_2012Metric_Pad1.15x1.50mm_HandSolder" H 9600 3000 50  0001 C CNN
+F 3 "~" H 9600 3000 50  0001 C CNN
+	1    9600 3000
 	1    0    0    -1  
 $EndComp
 $Comp
 L power:GND #PWR0123
 U 1 1 5B11B9A1
-P 9900 3100
-F 0 "#PWR0123" H 9900 2850 50  0001 C CNN
-F 1 "GND" H 9905 2927 50  0000 C CNN
-F 2 "" H 9900 3100 50  0001 C CNN
-F 3 "" H 9900 3100 50  0001 C CNN
-	1    9900 3100
+P 9900 3000
+F 0 "#PWR0123" H 9900 2750 50  0001 C CNN
+F 1 "GND" H 9905 2827 50  0000 C CNN
+F 2 "" H 9900 3000 50  0001 C CNN
+F 3 "" H 9900 3000 50  0001 C CNN
+	1    9900 3000
 	1    0    0    -1  
 $EndComp
 Wire Wire Line
-	9700 3100 9900 3100
-Text GLabel 7500 4100 0    50   Input ~ 0
+	9700 3000 9900 3000
+Text GLabel 7500 4200 0    50   Input ~ 0
 1wire
+Text GLabel 9500 3100 2    50   Input ~ 0
+!Lock
+Text GLabel 7500 4100 0    50   Input ~ 0
+!Lock
 $Comp
-L Connector_Generic:Conn_01x05 J11
-U 1 1 5ADE7775
+L Connector_Generic:Conn_01x06 J11
+U 1 1 5B4662DA
 P 7700 3900
-F 0 "J11" H 7780 3942 50  0000 L CNN
-F 1 "Out" H 7780 3851 50  0000 L CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Horizontal" H 7700 3900 50  0001 C CNN
+F 0 "J11" H 7779 3892 50  0000 L CNN
+F 1 "Out" H 7779 3801 50  0000 L CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Horizontal" H 7700 3900 50  0001 C CNN
 F 3 "~" H 7700 3900 50  0001 C CNN
 	1    7700 3900
 	1    0    0    -1  

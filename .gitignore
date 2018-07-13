@@ -50,6 +50,8 @@ Temporary Items
 # Private key files
 key.h
 x509.h
+rsakey*
+x509*
 
 # KiCAD backup files
 *.bak

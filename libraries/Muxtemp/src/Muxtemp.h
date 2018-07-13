@@ -15,7 +15,7 @@
 
 class Muxtemp {
   public:
-    Muxtemp(TwoWire&, uint8_t);
+    Muxtemp(TwoWire&, uint8_t, uint8_t);
     ~Muxtemp();
     uint8_t begin();
     void refresh();
@@ -25,13 +25,14 @@ class Muxtemp {
     uint8_t typeOf(uint8_t);
     uint8_t* getAddress(uint8_t);
     bool bypass1Wire();
-    uint32_t lock();
-    void setDelay(uint32_t);
+    bool lock();
 
   private:
+    uint8_t send(uint8_t, uint8_t);
     TwoWire *_Wire;
     int8_t _addr;
     int8_t _count;
+    uint8_t _lockPin;
     uint8_t _readCount();
     uint8_t *_sensors;
     uint32_t _available;

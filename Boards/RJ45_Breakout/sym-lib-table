@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name RJ45_Breakout-eagle-import)(type Legacy)(uri ${KIPRJMOD}/RJ45_Breakout-eagle-import.lib)(options "")(descr ""))
+)
