@@ -16,6 +16,7 @@
 class Muxtemp {
   public:
     Muxtemp(TwoWire&, uint8_t, uint8_t);
+    Muxtemp(TwoWire&, uint8_t);
     ~Muxtemp();
     uint8_t begin();
     void refresh();
@@ -28,6 +29,7 @@ class Muxtemp {
     bool lock();
 
   private:
+    void _begin(TwoWire&, uint8_t);
     uint8_t send(uint8_t, uint8_t);
     TwoWire *_Wire;
     int8_t _addr;

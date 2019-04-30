@@ -1,12 +1,20 @@
 #include "Muxtemp.h"
 
 Muxtemp::Muxtemp(TwoWire &_W, uint8_t _a, uint8_t _l) {
+  this->_lockPin = _l;
+  pinMode(this->_lockPin, INPUT_PULLUP);
+  this->_begin(_W, _a);
+}
+
+void Muxtemp::_begin(TwoWire &_W, uint8_t _a) {
   this->_Wire = &_W;
   this->_addr = _a;
   this->_available = 0;
   this->_count = 0;
-  this->_lockPin = _l;
-  pinMode(this->_lockPin, INPUT_PULLUP);
+}
+
+Muxtemp::Muxtemp(TwoWire &_W, uint8_t _a) {
+  this->_begin(_W, _a);
 }
 
 Muxtemp::~Muxtemp() {

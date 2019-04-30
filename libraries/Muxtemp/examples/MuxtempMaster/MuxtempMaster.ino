@@ -1,7 +1,6 @@
 #include <Wire.h>
 #include <Muxtemp.h>
-#include <ArduinoOTA.h>
-#define LOCK_P 2
+
 /*
    Example of master program for Muxtemp
    Connect by I2C to slave device
@@ -10,14 +9,14 @@
    ToDo: Add humidity reading (DHT)
 */
 
-Muxtemp ext(Wire, 0x10, LOCK_P);
+Muxtemp ext(Wire);
 
 void setup() {
   Wire.begin(5, 4); //SDA, SCL
   Serial.begin(115200);
   Serial.print(F("\r\nMaster begin \r\nMuxtemp: "));
   delay(500); //Wait for boot
-  Serial.println((ext.begin() == 0) ? F("Present") : F("Error"));
+  Serial.println((ext.begin(0x10) == 0) ? F("Present") : F("Error"));
   Serial.print(F("Ports: "));
   Serial.println(ext.getCount());
 
@@ -26,18 +25,10 @@ void setup() {
 }
 
 void loop() {
-  uint32_t _begin = millis();
-  Serial.print("Refreshing:\t");
-  ext.refresh(); //Probe ports and get temperatures at the same time
-  while (ext.lock());
-  Serial.println(millis() - _begin);
-  _begin = millis();
+  ext.refreshPorts(); //Probe ports and get temperatures at the same time
+  delay(5000); //Any DHT-related action needs some time
 
-  Serial.print("Refresh port type:\t");
   ext.getPorts(); //Which ports are connected & what type they are
-  while (ext.lock());
-  Serial.println(millis() - _begin);
-  _begin = millis();
 
   Serial.println();
   for (uint8_t a = 0; a < ext.getCount(); a++) {
@@ -57,5 +48,4 @@ void loop() {
     }
     Serial.println();
   }
-  while (ext.lock());
 }
