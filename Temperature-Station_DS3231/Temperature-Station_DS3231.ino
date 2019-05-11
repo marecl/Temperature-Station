@@ -1,31 +1,45 @@
 #include <ArduinoJson.h>
+#include <ArduinoOTA.h>
 #include <DallasTemperature.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266WebServerSecure.h>
 #include <ESP8266WiFi.h>
 #include <OneWire.h>
-#include <pgmspace.h>
 #include <RtcDS3231.h>
 #include <settingsManager.h>
 #include <SD.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <WiFiUdp.h>
+#include "CommonUtils.hpp"
+#include "SensorsPageHandler.hpp"
+#include "SensorsEditPageHandler.hpp"
+#include "TimePageHandler.hpp"
+#include "LoginPageHandler.hpp"
+
+/*
+   przy niewaznym ciasteczku przekierowac na /login
+   naprawic /login
+   Dostep do plikow przez strona/file=/[sciezka]
+   wywalic strings.cpp
+*/
 
 #define FS_NO_GLOBALS
 #include "FS.h"
-#include "defs.h"
+
+/* Pin definitions */
+#define SD_D D0     //GPIO16
+#define SDA D1      //GPIO5
+#define SCL D2      //GPIO4
+#define OW_PORT D3  //GPIO0
+#define SD_CS D4    //GPIO2
 
 /* Good when trying different configurations */
 #define SETTINGS_FILE "/SET.TXT" //SPIFFS
 #define SENSORS_FILE "/DATA/SENSORS.TXT" //SD
 
 /* Webpage */
-extern char index_htm[];
-extern char index_htm2[];
 extern char settings_htm[];
-extern char sensors_htm[];
-extern char sensors_htm2[];
 
 ESP8266WebServer server(80);
 //ESP8266WebServerSecure server(443);
@@ -38,6 +52,9 @@ RtcDS3231<TwoWire> zegar(Wire);
 RtcDateTime teraz;
 
 settingsManager settings(SETTINGS_FILE);
+
+settingsManager* CommonUtils::setptr = &settings;
+uint32_t CommonUtils::globalTimer = 0;
 
 void setup() {
   SPIFFS.begin();
@@ -60,18 +77,19 @@ void setup() {
   settings.configAP("TemperatureStation");            // AP ssid
   settings.useDHCP(true);
   settings.name("TemperatureStation");                // Device name
-  settings.ntpServer("");           // NTP server (not pool)
+  settings.ntpServer("tempus1.gum.gov.pl");           // NTP server (not pool)
   settings.configUser("admin", "admin");              // Login and password
   settings.timezone = 1;
   settings.useNTP = true;
   settings.readInterval = 10;                         // Read interval [min]
+  settings.tokenLifespan = 600;                      // Cookie lifespan [s]
   settings.save();
   settings.printConfig();
 #endif
 
-  Serial.print(F("Loading... "));
+  Serial.print(F("Loading..."));
   if (!settings.load()) { //Fill with default values
-    Serial.println(F("Fail"));
+    Serial.println(F(" Fail"));
     settings.configUser("admin", "admin");
     settings.name(PSTR("TemperatureStation"));
     settings.configAP(("TemperatureStation" + (String)ESP.getChipId()).c_str(), "TemperatureStation");
@@ -81,7 +99,7 @@ void setup() {
   if (strcmp(settings.ssid(), "")) {
     Serial.print(F("Connecting to:\r\n\t"));
     Serial.print(settings.ssid());
-    if (settings.beginWiFi()) {
+    if (settings.beginSTA()) {
       Serial.print(F("\tSuccess \r\nIP Address:\t"));
       Serial.print(WiFi.localIP());
       gotwifi = true;
@@ -102,14 +120,26 @@ void setup() {
   sensors.begin();
   sensors.requestTemperatures();
 
-  settings.configUpdateServer(&server, &updServer, "/update");
-  //server.setServerKeyAndCert_P(rsakey, sizeof(rsakey), x509, sizeof(x509));
-  server.on("/settings.cgi", devconfig);
-  server.on("/sensors.cgi", HTTP_GET, sensorSettings);
-  server.on("/editsaved.cgi", HTTP_POST, editsaved);
-  server.on("/time.cgi", HTTP_POST, timeset);
+  const char* headerkeys[] = {"Cookie"};
+  uint16_t headerkeyssize = sizeof(headerkeys) / sizeof(char*);
+  server.collectHeaders(headerkeys, headerkeyssize);
+  //settings.configUpdateServer(&server, &updServer, "/update");
+  //add SSL/BearSSL key
+  server.addHandler(new LoginPageHandler("/login"));
+  server.addHandler(new SensorsPageHandler("/sensors", &sensors, SENSORS_FILE));
+  server.addHandler(new SensorsEditPageHandler("/editsaved", SENSORS_FILE));
+  server.on("/settings", devconfig);
+  //server.addHandler(new TimePageHandler("/time", &settings));
+  server.on("/time", HTTP_POST, timeset);
+  server.on("/logout", []() {
+    server.sendHeader("Set-Cookie", settings.encryptKey(1));
+    server.sendHeader("Location", "/login");
+    server.sendHeader("Cache-Control", "no-cache");
+    server.send(301);
+  });
   server.onNotFound(handleNotFound);
   server.begin();
+  settings.beginOTA();
 
   Serial.println(F("HTTP server:\tStarted"));
 
@@ -134,10 +164,12 @@ void setup() {
     }
   }
   teraz = zegar.GetDateTime();
-  Serial.println(printDateTime(teraz));
+  char *date = new char[20];
+  Serial.println(CommonUtils::printDateTime(date, &teraz));
+  delete[] date;
   settings.save();
 
-  refreshSensors(&oneWire, SENSORS_FILE);
+  CommonUtils::refreshSensors(&oneWire, SENSORS_FILE);
 
   DynamicJsonBuffer jsonBuffer(1000);
   File root = SD.open(SENSORS_FILE, FILE_READ);
@@ -150,17 +182,17 @@ void setup() {
     JsonArray& _e = nSet[a];
     Serial.print('\t' + String(a + 1) + "/" + String(nSensor) + ": ");
     Serial.print(_e[0].as<const char*>());
-    if (getTemp(_e[1]) != -127)
+    if (CommonUtils::getTemp(&sensors, _e[1]) != -127)
       Serial.println(F(" Connected"));
     else Serial.println(F(" N/C"));
   }
-
-  Serial.println();
 }
 
 void loop() {
-  while (zegar.GetDateTime() % (settings.readInterval * 60) != 0) {
+  while (CommonUtils::globalTimer = zegar.GetDateTime(), \
+         CommonUtils::globalTimer % (settings.readInterval * 60) != 0) {
     server.handleClient();
+    ArduinoOTA.handle();
     yield();
   }
 
@@ -178,17 +210,20 @@ void loop() {
 
     File dest = SD.open(filename, FILE_WRITE);
 
-    Serial.print(printDateTime(teraz));
+    char *date = new char[20];
+    Serial.print(CommonUtils::printDateTime(date, &teraz));
     Serial.println(F("\tZapis"));
 
-    dest.print(printDateTime(teraz) + ";");
+    dest.print(date);
+    dest.print(F(";"));
     dest.print(settings.name());
     dest.print(F(":("));
     dest.flush();
+    delete[] date;
     bool first = true;
     for (uint8_t c = 0; c < nSet.size(); c++) {
       JsonArray& _e = nSet[c];
-      double tempRead = getTemp(_e[1]);
+      double tempRead = CommonUtils::getTemp(&sensors, _e[1]);
       if (tempRead == -127) continue;
 
       if (!first) dest.print(F(","));
@@ -212,8 +247,10 @@ void loop() {
     ESP.restart();
   }
 
-  while (zegar.GetDateTime() % (settings.readInterval * 60) == 0) {
+  while (CommonUtils::globalTimer = zegar.GetDateTime(),
+         CommonUtils::globalTimer % (settings.readInterval * 60) == 0) {
     server.handleClient();
+    ArduinoOTA.handle();
     yield();
   }
 }
@@ -223,7 +260,7 @@ uint32_t updateNTP(const char* ntpServerName) {
   IPAddress timeServerIP;
   udp.begin(2390);
   WiFi.hostByName(ntpServerName, timeServerIP);
-  Serial.println(F("Time sync..."));
+  Serial.print(F("Time sync..."));
 
   byte packetBuffer[48];
   memset(packetBuffer, 0, 48);
@@ -256,13 +293,18 @@ uint32_t updateNTP(const char* ntpServerName) {
     secsSince1900 -= 2208988800UL;
     secsSince1900 -= 946684800;
     secsSince1900 += settings.timezone * 3600;
+    Serial.println(F(" OK"));
     return secsSince1900;
-  } else return false;
+  }
+  Serial.println(F(" Fail"));
+  return false;
 }
 
 void devconfig() {
-  if (!settings.webAuthenticate(&server))
-    return server.requestAuthentication();
+  if (!LoginPageHandler::verifyLogin(&server, &settings)) {
+    LoginPageHandler::redirectToLogin(&server);
+    return;
+  }
 
   if (server.method() == HTTP_POST) {
     DynamicJsonBuffer output(JSON_OBJECT_SIZE(11));
@@ -310,21 +352,23 @@ void devconfig() {
                           settings.gatewayIP(),
                           settings.stringToIP(server.arg("OM").c_str()));
       settings.save();
-      returnOK(F("Settings saved"));
+      CommonUtils::returnOK(&server, F("Settings saved"));
     } else if (server.arg("a") == "r") {
-      returnOK(F("Settings reset. Rebooting..."));
+      CommonUtils::returnOK(&server, F("Settings reset. Rebooting..."));
       settings.remove(server.arg("SL").c_str(),
                       server.arg("SPL").c_str(),
                       SETTINGS_FILE);
       ESP.restart();
-    } else returnFail(F("Method not allowed"));
+    } else CommonUtils::returnFail(&server, F("Method not allowed"));
   } else server.send(200, F("text/html"), settings_htm);
   return void();
 }
 
 void timeset() {
-  if (!settings.webAuthenticate(&server))
-    return server.requestAuthentication();
+  if (!LoginPageHandler::verifyLogin(&server, &settings)) {
+    LoginPageHandler::redirectToLogin(&server);
+    return;
+  }
 
   if (server.method() == HTTP_POST) {
     if (server.arg("a") == "l") {
@@ -357,82 +401,13 @@ void timeset() {
         settings.save();
         returnOK(F("Time settings saved"));
       }
-    } else returnLoginFail();
+    } else CommonUtils::returnLoginFail(&server);
   }
   return void();
-}
-
-void sensorSettings() {
-  sensors.requestTemperatures();
-  if (!settings.webAuthenticate(&server))
-    return server.requestAuthentication();
-
-  DynamicJsonBuffer sensBuff(1000);
-  File tmpSens = SD.open(SENSORS_FILE , FILE_READ);
-  JsonArray& sensSet = sensBuff.parseArray(tmpSens);
-  tmpSens.close();
-
-  if (!sensSet.success())
-    return;
-
-  server.sendContent(sensors_htm);
-
-  for (uint8_t a = 0; a < sensSet.size(); a++) {
-    JsonArray& _e = sensSet[a];
-    double _t = getTemp(_e[1]);
-    server.sendContent(F("<tr><td><input type='text' name='"));
-    server.sendContent(String(a)); //Position in file
-    server.sendContent(F("' placeholder='"));
-    server.sendContent(_e[0].as<const char*>());
-    server.sendContent(F("'><td>"));
-    server.sendContent(_e[1]);
-    server.sendContent(F("</td><td>"));
-    server.sendContent(_t == -127.00 ? "N/C" : String(_t));
-    server.sendContent(F("</td><td><input type='checkbox' name='r' value='"));
-    server.sendContent(String(a));
-    server.sendContent(F("'>Remove</td></tr>"));
-  }
-  server.sendContent(sensors_htm2);
-  return void();
-}
-
-void editsaved() {
-  if (!settings.webAuthenticate(&server))
-    return server.requestAuthentication();
-
-  if (server.args() != 0) {
-    DynamicJsonBuffer sensBuff(1000);
-    File tmpSens = SD.open(SENSORS_FILE , FILE_READ);
-    JsonArray& sensSet = sensBuff.parseArray(tmpSens);
-    tmpSens.close();
-
-    if (!sensSet.success())
-      return;
-
-    for (int x = server.args() - 1; x >= 0; x--) {
-      if (server.argName(x) == "r")
-        sensSet.remove((atoi((server.arg(x)).c_str())));
-      else
-        sensSet[atoi((server.argName(x)).c_str())][0] = server.arg(x);
-
-    }
-    saveJson(sensSet, SENSORS_FILE);
-  }
-  server.sendContent(F("HTTP/1.1 303 See Other\r\nLocation:/sensors.cgi\r\n"));
 }
 
 void returnOK(const __FlashStringHelper* _m) {
   server.send(200, F("text/plain"), _m);
-  return void();
-}
-
-void returnFail(String _m) {
-  server.send(500, F("text/plain"), _m + PSTR("\r\n"));
-  return void();
-}
-
-void returnLoginFail() {
-  server.send(401, F("text/plain"), F("Incorrect login or password"));
   return void();
 }
 
@@ -459,8 +434,10 @@ bool loadFromSdCard(String path) {
 }
 
 void handleNotFound() {
-  if (!settings.webAuthenticate(&server))
-    return server.requestAuthentication();
+  if (!LoginPageHandler::verifyLogin(&server, &settings)) {
+    LoginPageHandler::redirectToLogin(&server);
+    return;
+  }
 
   String p = server.uri();
   if (SD.exists("/data" + p) && !digitalRead(SD_D)) {
@@ -482,16 +459,11 @@ void handleNotFound() {
   server.send(404, "text/plain", message);
 }
 
-double getTemp(JsonArray & addrset) {
-  byte tempaddr[8];
-  for (int b = 0; b < 8; b++)
-    tempaddr[b] = addrset[b];
-  return sensors.getTempC(tempaddr);
-}
-
 void handleIndex(String path) {
-  if (!settings.webAuthenticate(&server))
-    return server.requestAuthentication();
+  if (!LoginPageHandler::verifyLogin(&server, &settings)) {
+    LoginPageHandler::redirectToLogin(&server);
+    return;
+  }
 
   File dir = SD.open("/data" + path, FILE_READ);
   if (!dir.isDirectory()) {
@@ -501,9 +473,18 @@ void handleIndex(String path) {
   dir.rewindDirectory();
 
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server.sendContent(index_htm);
+  server.sendContent(F("<!DOCTYPE html><html lang=\"en\">"));
+  server.sendContent(F("<head><meta http-equiv=\"cache-control\" content"));
+  server.sendContent(F("=\"no-cache\" /><title>Temperature Station"));
+  server.sendContent(F("</title></head><body><a href=\"/logout\"><input type"));
+  server.sendContent(F("=\"button\" value=\"Logout\" /></a><a href=\"/settings\">"));
+  server.sendContent(F("<input type=\"button\" value=\"Settings\" /></a>"));
+  server.sendContent(F("<a href=\"/sensors\"><input type=\"button\""));
+  server.sendContent(F(" value=\"Sensors\" /></a><h1>Index of "));
+
   server.sendContent(path);
-  server.sendContent(index_htm2);
+  server.sendContent(F("</h1><table><tr><th>Type</th><th>Name</th>"));
+  server.sendContent(F("<th>Size</th></tr>"));
 
   server.sendContent(F("<tr><td>Dir</td><td><a href=\""));
   if (path.lastIndexOf('/') > 4)
@@ -529,5 +510,65 @@ void handleIndex(String path) {
   }
   entry.close();
   server.sendContent(F("</table></body></html>"));
+  return void();
+}
+
+void createFile(char* _fn, uint8_t _buf, RtcDateTime& dt) {
+  memset(_fn, 0, _buf);
+  snprintf_P(_fn, _buf, PSTR("/data/%04u%02u"), dt.Year(), dt.Month());
+  SD.mkdir(_fn);
+  snprintf_P(_fn, _buf, PSTR("%s/%02u.csv"), _fn, dt.Day());
+}
+
+void I2C_clearBus() {
+  //http://www.forward.com.au/pfod/ArduinoProgramming/I2C_ClearBus/index.html
+  Serial.println(F("Resetting RTC I2C interface"));
+  pinMode(SDA, INPUT_PULLUP);
+  pinMode(SCL, INPUT_PULLUP);
+
+  delay(2500);
+
+  boolean SCL_LOW = (digitalRead(SCL) == LOW); // Check is SCL is Low.
+  if (SCL_LOW)
+    Serial.println("Cannot become master");
+
+  boolean SDA_LOW = (digitalRead(SDA) == LOW);  // vi. Check SDA input.
+  int clockCount = 20; // > 2x9 clock
+
+  while (SDA_LOW && (clockCount > 0)) { //  vii. If SDA is Low,
+    clockCount--;
+
+    pinMode(SCL, INPUT);
+    pinMode(SCL, OUTPUT);
+    delayMicroseconds(10);
+    pinMode(SCL, INPUT);
+    pinMode(SCL, INPUT_PULLUP);
+    delayMicroseconds(10); //  for >5uS
+    // The >5uS is so that even the slowest I2C devices are handled.
+    SCL_LOW = (digitalRead(SCL) == LOW); // Check if SCL is Low.
+    int counter = 20;
+    while (SCL_LOW && (counter > 0)) {  //  loop waiting for SCL to become High only wait 2sec.
+      counter--;
+      delay(100);
+      SCL_LOW = (digitalRead(SCL) == LOW);
+    }
+    if (SCL_LOW) break;
+    SDA_LOW = (digitalRead(SDA) == LOW); //   and check SDA input again and loop
+  }
+  if (SDA_LOW) { // still low
+    Serial.println("SDA still low");
+  }
+
+  // else pull SDA line low for Start or Repeated Start
+  pinMode(SDA, INPUT); // remove pullup.
+  pinMode(SDA, OUTPUT);  // and then make it LOW i.e. send an I2C Start or Repeated start control.
+  // When there is only one I2C master a Start or Repeat Start has the same function as a Stop and clears the bus.
+  /// A Repeat Start is a Start occurring after a Start with no intervening Stop.
+  delayMicroseconds(10); // wait >5uS
+  pinMode(SDA, INPUT); // remove output low
+  pinMode(SDA, INPUT_PULLUP); // and make SDA high i.e. send I2C STOP control.
+  delayMicroseconds(10); // x. wait >5uS
+  pinMode(SDA, INPUT); // and reset pins as tri-state inputs which is the default state on reset
+  pinMode(SCL, INPUT);
   return void();
 }

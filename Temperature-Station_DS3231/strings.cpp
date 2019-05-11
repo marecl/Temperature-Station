@@ -1,29 +1,5 @@
 #include<pgmspace.h>
 
-char sensors_htm[] PROGMEM = R"abcd(<!DOCTYPE html><html><head><title>
-Sensors</title><style>table, th, td{border: 1px solid black;text-align: center}
-</style></head><body><a href="/"><input type="button" value="Back" /></a>
-<form id="saved" method="POST" action="/editsaved.cgi"onsubmit="var
-a=document.forms.saved.elements;for(var t=0;t<a.length-1;t+=2)
-a[t].disabled=(a[t+1].checked||a[t].value==''||a[t].placeholder==a[t].value);">
-<table><caption><b>Name Settings</b></caption><th>Name</th><th>Address</th>
-<th>Temperature [C]</th><th>Remove</th>)abcd";
-
-char sensors_htm2[] PROGMEM = R"abcd(</table><button type="submit">Save Changes
-</button><a href="sensors.txt"><input type="button" value="Backup config" />
-</a></form></body></html>)abcd";
-
-char index_htm[] PROGMEM = R"abcd(<!DOCTYPE html><html lang="en">
-<head><meta http-equiv="cache-control" content="no-cache" />
-<title>Temperature Station</title></head>
-<body><a href="/settings.cgi"><input type="button" value="Settings" /></a>
-<a href="/sensors.cgi"><input type="button" value="Sensors" /></a>
-<h1>Index of )abcd";
-
-char index_htm2[] PROGMEM = R"abcd(
-</h1><table><tr><th>Type</th><th>Name</th><th>Size</th></tr>
-)abcd";
-
 char settings_htm[] PROGMEM = R"abcd(
 <!DOCTYPE html><html><head><title>Temperature Station</title><meta http-equiv="cache-control" content="no-cache" /><style>table,
 th,
@@ -32,7 +8,7 @@ border: 1px solid black;
 text-align: center}
 </style></head><body onload="loadSettings()"><a href="/"><button>Back</button></a><form method="POST" id="general"><table align="center"><caption>General settings</caption><tr><td>Name:</td><td><input type="text" id="SN" size="20" name="SN"></td></tr><tr><td>AP SSID:</td><td><input type="text" id="SS" size="20" name="SS"></td></tr><tr><td>Update AP:</td><td><input type="checkbox" id="ch_ap" name="ch_ap"></td></tr><tr><td>AP WPA2 Key:</td><td><input type="text" id="SPA" size="20" name="SPA"></td></tr><tr><td>Login:</td><td><input type="text" id="SL" size="20" name="SL"></td></tr><tr><td>Pasword:</td><td><input type="password" id="SPL" size="20" name="SPL"></td></tr><tr><td>New login:</td><td><input type="text" id="NL" size="20" name="NL"></td></tr><tr><td>New pasword:</td><td><input type="password" id="NP" size="20" name="NP"></td></tr><tr><td>Repeat Pasword:</td><td><input type="password" id="RNP" size="20" name="RNP"></td></tr><tr><td>Network SSID:</td><td><input type="text" id="OS" size="20" name="OS"></td></tr><tr><td>Update WiFi:</td><td><input type="checkbox" id="ch_wi" name="ch_wi"></td></tr><tr><td>Network Passphrase:</td><td><input type="text" id="OP" size="20" name="OP"></td></tr><tr><td>IP Address:</td><td><input type="text" id="OI" size="20" name="OI"></td></tr><tr><td>Gateway:</td><td><input type="text" id="OG" size="20" name="OG"></td></tr><tr><td>Broadcast:</td><td><input type="text" id="OM" size="20" name="OM"></td></tr><tr><td>Use DHCP:</td><td><input type="checkbox" id="OD" name="OD">Enable</td></tr></table><input type="button" onclick="uploadGen()" value="Save"></form><br><form method="POST" id="time"><table align="center"><caption>Time settings</caption><tr><td>Date and time:</td><td><input type="datetime-local" id="datetime" name="datetime" min="2000-01-01T00:00"></td></tr><tr><td>Timezone:</td><td><input type="text" id="TZ" size="20" name="TZ"></td></tr><tr><td>Use NTP Server:</td><td><input type="checkbox" id="UN" value="1" name="UN"></td></tr><tr><td>NTP Server:</td><td><input type="text" id="NS" name="NS"></td></tr></table><input type="button" onclick="uploadTime()" value="Save"></form><input type="button" onclick="reset()" value="Factory reset"><br><script>function loadSettings(){
 var xhr=new XMLHttpRequest();
-xhr.open("POST","/settings.cgi",true);
+xhr.open("POST","/settings",true);
 xhr.setRequestHeader("Content-type","application/x-www-form-urlencoded");
 xhr.send("a=l");
 xhr.onreadystatechange=function(){
@@ -71,7 +47,7 @@ getTime();
 return;}
 function getTime(){
 var xhr=new XMLHttpRequest();
-xhr.open("POST","/time.cgi",true);
+xhr.open("POST","/time",true);
 xhr.setRequestHeader("Content-type","application/x-www-form-urlencoded");
 xhr.send("a=l");
 xhr.onreadystatechange=function(){
@@ -134,7 +110,7 @@ for(var i=0;i<a.length;i++){
 var b=a[i];
 if(!b.disabled){
 postData.push(b.name+"="+b.value);}}
-upload(postData,"/settings.cgi");}
+upload(postData,"/settings");}
 for(var i=0;i<a.length;i++){
 a[i].disabled=false;}
 return;}
@@ -167,10 +143,10 @@ var epo=(new Date(g.datetime.value).getTime())/1000;
 if(!isNaN(epo)){
 postData.push("EP="+epo);}
 if(returnOK){
-upload(postData,"/time.cgi");}
+upload(postData,"/time");}
 return;}
 function reset(){
-upload(["a=r"],"/settings.cgi");
+upload(["a=r"],"/settings");
 return;}
 function upload(what,where){
 var a=document.forms.general;
