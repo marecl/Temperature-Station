@@ -13,8 +13,12 @@
 #define MUX_LOCK 2
 #define SD_CS 16
 
+/* Good when trying different configurations */
+#define SETTINGS_FILE "/SET.TXT" //SPIFFS
+#define SENSORS_FILE "/SENSORS.TXT" //SD
+
 //int isMember(byte, JsonArray&);
-//int isMember(JsonArray&, JsonObject&);
+int isMember(JsonArray&, JsonArray&);
 //int isMember(int, JsonArray&);
 int isMember(const uint8_t*, JsonArray&, uint8_t);
 String addrToString(const uint8_t*, uint8_t);
@@ -33,18 +37,84 @@ String addrToString(const uint8_t*, uint8_t);
   }
 */
 
-/*
-  int isMember(JsonArray& locArr, JsonObject& remObj) {
-  for (uint8_t locsiz = 0; locsiz < locArr.size(); locsiz++) {
+void printSensors(Muxtemp* _s, Stream& _stream) {
+  DynamicJsonBuffer jsonBuffer(2250);
+  File root = SD.open(SENSORS_FILE, FILE_READ);
+  JsonObject& nSet = jsonBuffer.parseObject(root);
+  JsonArray& _local = nSet["local"];
+  JsonArray& _saved = nSet["saved"];
+  root.close();
+
+  _stream.println(F("\r\nPort\tType\tPort Name\tDevice Name\t\tAddress (if supported)"));
+  for (int a = 0; a < _s->getCount(); a++) {
+    uint8_t _type = _s->typeOf(a);
+    JsonArray& _curr = _local[a];
+
+    _stream.print(String(a + 1) + "/" + String(_s->getCount()));
+    _stream.print('\t' + String(_type) + '\t');
+    const char* _n = _curr[0];
+    _stream.print(_n);
+
+    if (_type == 40) {
+      for (uint8_t a = 0; a < 2 - (strlen(_n) / 8); a++)
+        _stream.print('\t');
+      uint8_t *_q = _s->getAddress(a);
+      int pos = isMember(_q, _saved, 8);
+
+      _n = _saved[pos][0];
+      _stream.print(_n);
+      for (uint8_t a = 0; a < 3 - (strlen(_n) / 8); a++)
+        _stream.print('\t');
+      _stream.print(F("("));
+
+      for (uint8_t y = 0; y < 8; y++) {
+        _stream.print(*(_q + y));
+        _stream.print(y < 7 ? ',' : ')');
+      }
+    }
+    _stream.println();
+  }
+
+  _stream.println(F("\r\nAll sensors:"));
+  for (uint8_t a = 0; a < _saved.size(); a++) {
+    JsonArray& _e =  _saved[a];
+    _stream.print('\t' + String(a + 1) + '.');
+    _stream.print(_e[0].as<const char*>());
+    _stream.print('\t');
+    _stream.println(_e[1].as<const char*>());
+  }
+  _stream.println();
+}
+
+bool addDiff(JsonArray& _s, char* _r) {
+  bool _ret = false;
+  DynamicJsonBuffer remoteBuffer;
+  JsonArray& _rdev = remoteBuffer.parseArray(_r);
+  if (!_rdev.success()) Serial.println("JSON error");
+  else {
+    for (uint8_t z = 0; z < _rdev.size(); z++) {
+      if (isMember(_s, _rdev[z][1]) == -1) {
+        JsonArray& _e = _s.createNestedArray();
+        _e.add(_rdev[z][0]);
+        _e.add(_rdev[z][1]);
+        _ret = true;
+      }
+    }
+  }
+  return _ret;
+}
+
+int isMember(JsonArray& _l, JsonArray& _r) { //In context of saved devices
+  for (uint8_t locsiz = 0; locsiz < _l.size(); locsiz++) {
+    JsonArray& _e = _l[locsiz][1];
     for (uint8_t a = 0; a < 8; a++) {
-      if (locArr[locsiz][1][a].as<byte>() != remObj[1][a].as<byte>())
+      if (_e[a].as<byte>() != _r[a].as<byte>())
         break;
       else if (a == 7) return locsiz;
     }
   }
   return -1;
-  }
-*/
+}
 
 /*
   int isMember(int locAddr, JsonArray& remArr) {

@@ -6,26 +6,27 @@
 #include <ESP8266WiFi.h>
 #include <OneWire.h>
 #include <RtcDS3231.h>
-#include <settingsManager.h>
+#include <settingsManager_legacy.h>
 #include <SD.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <WiFiUdp.h>
+#include <rBase64.h>
 #include "CommonUtils.hpp"
+#include "LoginPageHandler.hpp"
 #include "SensorsPageHandler.hpp"
 #include "SensorsEditPageHandler.hpp"
 #include "TimePageHandler.hpp"
-#include "LoginPageHandler.hpp"
 
 /*
-   przy niewaznym ciasteczku przekierowac na /login
-   naprawic /login
+   4M 2MSPIFFS
    Dostep do plikow przez strona/file=/[sciezka]
    wywalic strings.cpp
+   naprawic strone z ustawianem czasu
 */
 
-#define FS_NO_GLOBALS
-#include "FS.h"
+//#define FS_NO_GLOBALS
+//#include "FS.h"
 
 /* Pin definitions */
 #define SD_D D0     //GPIO16
@@ -73,7 +74,7 @@ void setup() {
 #ifdef DEBUG_INSECURE
   settings.serialDebug(&Serial);
   //Use this section to overwrite settings while debugging
-  settings.configSTA("", "");  // ssid and password
+  settings.configSTA("HOPSIUP", "P!ontk0wyW13cz#r");  // ssid and password
   settings.configAP("TemperatureStation");            // AP ssid
   settings.useDHCP(true);
   settings.name("TemperatureStation");                // Device name
@@ -91,7 +92,7 @@ void setup() {
   if (!settings.load()) { //Fill with default values
     Serial.println(F(" Fail"));
     settings.configUser("admin", "admin");
-    settings.name(PSTR("TemperatureStation"));
+    settings.name("TemperatureStation");
     settings.configAP(("TemperatureStation" + (String)ESP.getChipId()).c_str(), "TemperatureStation");
   } else Serial.println(F("OK"));
 
@@ -123,7 +124,7 @@ void setup() {
   const char* headerkeys[] = {"Cookie"};
   uint16_t headerkeyssize = sizeof(headerkeys) / sizeof(char*);
   server.collectHeaders(headerkeys, headerkeyssize);
-  //settings.configUpdateServer(&server, &updServer, "/update");
+  settings.configUpdateServer(&server, &updServer, "/update");
   //add SSL/BearSSL key
   server.addHandler(new LoginPageHandler("/login"));
   server.addHandler(new SensorsPageHandler("/sensors", &sensors, SENSORS_FILE));
@@ -139,7 +140,6 @@ void setup() {
   });
   server.onNotFound(handleNotFound);
   server.begin();
-  settings.beginOTA();
 
   Serial.println(F("HTTP server:\tStarted"));
 
@@ -192,7 +192,6 @@ void loop() {
   while (CommonUtils::globalTimer = zegar.GetDateTime(), \
          CommonUtils::globalTimer % (settings.readInterval * 60) != 0) {
     server.handleClient();
-    ArduinoOTA.handle();
     yield();
   }
 
@@ -250,7 +249,6 @@ void loop() {
   while (CommonUtils::globalTimer = zegar.GetDateTime(),
          CommonUtils::globalTimer % (settings.readInterval * 60) == 0) {
     server.handleClient();
-    ArduinoOTA.handle();
     yield();
   }
 }
@@ -326,12 +324,15 @@ void devconfig() {
       data.printTo(resp);
       server.send(200, F("application/json"), resp);
     } else if (server.arg("a") == "s") {
-      if (server.hasArg("SS") && server.hasArg("SPA"))
+      if (server.hasArg("SS") && server.hasArg("SPA")) {
         settings.configAP(server.arg("SS").c_str(),
                           server.arg("SPA").c_str());
-      if (server.hasArg("OS") && server.hasArg("OP"))
+      }
+      if (server.hasArg("OS") && server.hasArg("OP")) {
+        rbase64.decode(server.arg("OP").c_str());
         settings.configSTA(server.arg("OS").c_str(),
-                           server.arg("OP").c_str());
+                           rbase64.result());
+      }
       if (server.hasArg("OD"))
         settings.useDHCP(server.arg("OD")[0] == '1');
       if (server.hasArg("SN"))
@@ -352,7 +353,8 @@ void devconfig() {
                           settings.gatewayIP(),
                           settings.stringToIP(server.arg("OM").c_str()));
       settings.save();
-      CommonUtils::returnOK(&server, F("Settings saved"));
+      CommonUtils::returnOK(&server, F("Settings saved. Rebooting..."));
+      ESP.restart();
     } else if (server.arg("a") == "r") {
       CommonUtils::returnOK(&server, F("Settings reset. Rebooting..."));
       settings.remove(server.arg("SL").c_str(),
@@ -365,10 +367,10 @@ void devconfig() {
 }
 
 void timeset() {
-  if (!LoginPageHandler::verifyLogin(&server, &settings)) {
-    LoginPageHandler::redirectToLogin(&server);
-    return;
-  }
+  if (!LoginPageHandler::verifyLogin(&server, &settings))
+    return LoginPageHandler::redirectToLogin(&server);
+
+
 
   if (server.method() == HTTP_POST) {
     if (server.arg("a") == "l") {
@@ -381,27 +383,23 @@ void timeset() {
                  teraz.Hour(),
                  teraz.Minute());
       server.send(200, F("text/plain"), _d);
-    } else if (settings.authenticate(
-                 server.arg("SL").c_str(),
-                 server.arg("SPL").c_str())) {
-      if (server.arg("a") == "s") {
-        if (server.hasArg("TZ"))
-          settings.timezone = atoi(server.arg("TZ").c_str());
-        if (server.hasArg("UN"))
-          settings.useNTP = (server.arg("UN")[0] == '1');
-        if (server.hasArg("NS"))
-          settings.ntpServer(server.arg("NS").c_str());
-        if (server.hasArg("EP")) {
-          uint32_t newTime = strtoul(server.arg("EP").c_str(), NULL, 10);
-          newTime += 3600 * settings.timezone;
-          newTime -= 946684800;
-          zegar.SetDateTime(RtcDateTime(newTime));
-          settings.lastUpdate = newTime;
-        }
-        settings.save();
-        returnOK(F("Time settings saved"));
+    } else if (server.arg("a") == "s") {
+      if (server.hasArg("TZ"))
+        settings.timezone = atoi(server.arg("TZ").c_str());
+      if (server.hasArg("UN"))
+        settings.useNTP = (server.arg("UN")[0] == '1');
+      if (server.hasArg("NS"))
+        settings.ntpServer(server.arg("NS").c_str());
+      if (server.hasArg("EP")) {
+        uint32_t newTime = strtoul(server.arg("EP").c_str(), NULL, 10);
+        newTime += 3600 * settings.timezone;
+        newTime -= 946684800;
+        zegar.SetDateTime(RtcDateTime(newTime));
+        settings.lastUpdate = newTime;
       }
-    } else CommonUtils::returnLoginFail(&server);
+      settings.save();
+      CommonUtils::returnOK(&server, F("Time settings saved"));
+    }
   }
   return void();
 }

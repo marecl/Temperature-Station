@@ -99,6 +99,7 @@ void setup() {
   IPAddress ip(192, 168, 2, 98);
   IPAddress gateway(192, 168, 2, 1);
   IPAddress subnet(255, 255, 255, 0);
+  settings.configSTA("bosszantogazember", "P!ontk0wyW13cz#r");
   settings.configAP("TemperatureStation", "TemperatureStation");
   settings.useDHCP(false);
   settings.name("TemperatureStation");
@@ -438,13 +439,13 @@ idle:
           continue;
 
         if (!_f) dest.print(F(","));
+        else _f = false;
         dest.print(c);
         dest.print(F("="));
         dest.print(_n);
         dest.print(F("="));
         dest.print(tempRead, 1);
         dest.flush();
-        _f = false;
       }
       dest.println(");");
       dest.flush();

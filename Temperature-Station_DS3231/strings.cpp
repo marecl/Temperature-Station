@@ -80,7 +80,7 @@ if(a.OS.value==""){
 submitOK=false;
 alert("Check WiFi settings");}else{
 postData.push("OS="+a.OS.value);
-postData.push("OP="+a.OP.value);
+postData.push("OP="+btoa(a.OP.value));
 a.OS.disabled=true;
 a.OP.disabled=true;}}
 if(!a.OI.disabled&&!validIP(a.OI.value)){

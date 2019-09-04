@@ -1,6 +1,6 @@
 /*
-  Library which is made to hold all settings of Temperature Station
-  There is no way (I know) to make it return passwords / other sensitive data
+   Library which is made to hold all settings of Temperature Station
+   There is no way (I know) to make it return passwords / other sensitive data
 */
 
 /*
@@ -11,12 +11,12 @@
 
 class settingsHandler {
   public:
-    settingsHandler(const char*);
+    settingsHandler();
     ~settingsHandler();
-    void save();
-    bool load();
-    void configSTA(const char*, const char* = NULL);
-    void configAP(const char*, const char* = NULL);
+    void save(const char*);
+    bool load(const char*);
+    void config(const char*, const char*);
+    void configAP(const char*, const char*);
     void ssid(const char*);
     void ssidAP(const char*);
     void configIP(IPAddress, IPAddress, IPAddress);
@@ -28,10 +28,9 @@ class settingsHandler {
     bool authenticate(const char*, const char*);
     bool beginWiFi();
     bool beginAP();
-    void configUpdateServer(ESP8266WebServer*, ESP8266HTTPUpdateServer*, const char*);
     void beginOTA(uint16_t = 8266);
     bool webAuthenticate(ESP8266WebServer*);
-    bool remove(const char*, const char*, const char*);
+    bool reset(const char*, const char*, const char*);
     IPAddress localIP();
     IPAddress gatewayIP();
     IPAddress subnetMask();
@@ -43,8 +42,6 @@ class settingsHandler {
     IPAddress stringToIP(const char*);
 #ifdef S_DEBUG
     void serialDebug(HardwareSerial*);
-    void printConfigFile();
-    void printConfig();
 #endif
 
   private:
@@ -56,13 +53,11 @@ class settingsHandler {
     char* _ssidap;
     char* _user;
     char* _pwd;
-    char* _file;
     bool _dhcp;
     IPAddress _ip;
     IPAddress _gw;
     IPAddress _mask;
 #ifdef S_DEBUG
-    void _print(const __FlashStringHelper*, const char* = NULL);
     HardwareSerial *_debug;
 #endif
 };

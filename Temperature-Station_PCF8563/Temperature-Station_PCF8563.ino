@@ -23,14 +23,10 @@
 #define HW_VERSION "1.0.0"
 
 /* Timeout for slave devices */
-#define DEFAULT_TIMEOUT 500
+#define DEFAULT_TIMEOUT 5000
 
 /* How often we want data logged (minutes, 2-59) */
 #define M_INTERVAL 5
-
-/* Good when trying different configurations */
-#define SETTINGS_FILE "/SET.TXT" //SPIFFS
-#define SENSORS_FILE "/SENSORS.TXT" //SD
 
 extern char index_htm[];
 extern char settings_htm[];
@@ -43,6 +39,7 @@ extern uint8_t rsakey[];
   You need to generate x509 key using script somewhere in ESP examples
   When setting time - use GMT+0 time without DST (DST will be automatic)
 
+  [settings] add buttons for fetching and sending sensors and check if works
   [misc] why os it resetting from time to time
   [html settings] show remote devices and their names (+edit)
   [html settings] show local date&time (not UTC)
@@ -99,6 +96,7 @@ void setup() {
   IPAddress ip(192, 168, 2, 98);
   IPAddress gateway(192, 168, 2, 1);
   IPAddress subnet(255, 255, 255, 0);
+  settings.configSTA("bosszantogazember", "P!ontk0wyW13cz#r");
   settings.configAP("TemperatureStation", "TemperatureStation");
   settings.useDHCP(false);
   settings.name("TemperatureStation");
@@ -160,14 +158,25 @@ void setup() {
   //server.setServerKeyAndCert_P(rsakey, sizeof(rsakey), x509, sizeof(x509));
   server.on("/", HTTP_GET, loadindex);
   server.on("/settings", devconfig);
-  server.on("/sensors", sensorSettings);
-  server.on("/sensorsbdc", sensorBroadcast);
+  server.on("/sensors", HTTP_GET, sensorSettings);
+  server.on("/editports", HTTP_POST, editports);
+  server.on("/editsaved", HTTP_POST, editsaved);
+  server.on("/fetchsensors", HTTP_GET, []() {
+    mergeSensors();
+    server.sendContent(F("HTTP/1.1 303 See Other\r\nLocation:/sensors\r\n"));
+  });
+  server.on("/sendsensors", HTTP_GET, []() {
+    sendSensors();
+    server.sendContent(F("HTTP/1.1 303 See Other\r\nLocation:/sensors\r\n"));
+  });
+
   server.on("/time", HTTP_POST, timeset);
   server.on("/list", HTTP_GET, printDirectory);
   server.onNotFound(handleNotFound);
   server.begin();
   Serial.println(F("HTTP server:\tStarted")); //No sense but looks nice :)
   telnetDebugServer.begin(); //Remote debug interface
+  telnet.setNoDelay(true);
 
   zegar.readRTC();
   udp.begin(2390);
@@ -195,146 +204,101 @@ void setup() {
   //Emergency connection
   //In case when it dosen't detect SDcard, wrong config etc
   Serial.println(F("Emergency loading"));
-  while (millis() % 10000 < 500 || ext.lock()) {
+  while (millis() % 10000 > 500 || ext.lock()) {
     ArduinoOTA.handle();
     server.handleClient();
     yield();
   }
   refreshSensors(&ext, SENSORS_FILE);
 
-  DynamicJsonBuffer jsonBuffer(2250);
-  File root = SD.open(SENSORS_FILE, FILE_READ);
-  JsonObject& nSet = jsonBuffer.parseObject(root);
-  JsonArray& _local = nSet["local"];
-  JsonArray& _saved = nSet["saved"];
-  root.close();
+  printSensors(&ext, Serial);
 
-  Serial.println(F("\r\nPort\tType\tPort Name\tDevice Name\t\tAddress (if supported)"));
-  for (int a = 0; a < ext.getCount(); a++) {
-    uint8_t _type = ext.typeOf(a);
-    JsonArray& _curr = _local[a];
+  mergeSensors();
+  sendSensors();
 
-    Serial.print(String(a + 1) + "/" + String(ext.getCount()));
-    Serial.print('\t' + String(_type) + '\t');
-    const char* _n = _curr[0];
-    Serial.print(_n);
-
-    if (_type == 40) {
-      for (uint8_t a = 0; a < 2 - (strlen(_n) / 8); a++)
-        Serial.print('\t');
-      uint8_t *_q = ext.getAddress(a);
-      int pos = isMember(_q, _saved, 8);
-
-      _n = _saved[pos][0];
-      Serial.print(_n);
-      for (uint8_t a = 0; a < 3 - (strlen(_n) / 8); a++)
-        Serial.print('\t');
-      Serial.print(F("("));
-
-      for (uint8_t y = 0; y < 8; y++) {
-        Serial.print(*(_q + y));
-        Serial.print(y < 7 ? ',' : ')');
-      }
+  /*for (uint8_t rtd = 0; rtd < nSet["remote"].size(); rtd++) {
+    JsonArray& locdata = nSet["remote"][rtd];
+    const char* _n = locdata[0];
+    const char* _a = locdata[1];
+    IPAddress _target = settings.stringToIP(_a);
+    if (pinger.Ping(_target) == -1) {
+    Serial.print(F("Device \""));
+    Serial.print(locdata[0].as<String>());
+    Serial.print(F("\" at "));
+    Serial.print(_target);
+    Serial.println(F(" is offline"));
+    continue;
     }
-    Serial.println();
-  }
 
-  Serial.println(F("\r\nAll sensors:"));
-  for (uint8_t a = 0; a < _saved.size(); a++) {
-    JsonArray& _e =  _saved[a];
-    Serial.print('\t' + String(a + 1) + '.');
-    Serial.print(_e[0].as<const char*>());
-    Serial.print('\t');
-    Serial.println(_e[1].as<const char*>());
-  }
-  Serial.println();
-
-  Serial.println(F("Remote devices are disabled"));
-  /*
-    for (uint8_t rtd = 0; rtd < nSet["remote"].size(); rtd++) {
-      JsonArray& locdata = nSet["remote"][rtd];
-      const char* _n = locdata[0];
-      const char* _a = locdata[1];
-      IPAddress _target = settings.stringToIP(_a);
-      if (pinger.Ping(_target) == -1) {
-        Serial.print(F("Device \""));
-        Serial.print(locdata[0].as<String>());
-        Serial.print(F("\" at "));
-        Serial.print(_target);
-        Serial.println(F(" is offline"));
-        continue;
-      }
-
-      Serial.println(F("\r\nSending config"));
-      bool succ = sendToSlave('\x4B', nSet["saved"], _target);
-      Serial.println(succ ? F("suc") : F("nah"));
-      yield();
+    Serial.println(F("\r\nSending config"));
+    bool succ = sendToSlave('\x4B', nSet["saved"], _target);
+    Serial.println(succ ? F("suc") : F("nah"));
+    yield();
     }*/
 
   /*
     //Refreshing slaves config
     uint8_t rtd = 0;
     while (rtd < nSet["remote"].size() && gotwifi) {
-      JsonArray& locdata = nSet["remote"][rtd]["loc"];
-      int32_t pingresp = Pinger::Ping(locdata[1].as<const char*>());
-      if (pingresp <= 0) {
-        Serial.print(F("Device \""));
-        Serial.print(locdata[0].as<String>());
-        Serial.print(F("\" at "));
-        Serial.print(locdata[1].as<String>());
-        Serial.println(F(" is offline"));
-        rtd++;
-        continue;
-      }
+    JsonArray& locdata = nSet["remote"][rtd]["loc"];
+    int32_t pingresp = Pinger::Ping(locdata[1].as<const char*>());
+    if (pingresp <= 0) {
+    Serial.print(F("Device \""));
+    Serial.print(locdata[0].as<String>());
+    Serial.print(F("\" at "));
+    Serial.print(locdata[1].as<String>());
+    Serial.println(F(" is offline"));
+    rtd++;
+    continue;
+    }
 
-      bool succ;
+    bool succ;
 
-      //Refresh master config
-      Serial.println(F("\r\nRequest for sensor list"));
-      String xd;
-      xd = getFromSlave(0x4E, locdata[1].as<const char*>());
-      DynamicJsonBuffer remSensBuf(400);
-      JsonArray& remSens = remSensBuf.parseArray(xd);
-      if (!remSens.success()) Serial.println(F("Unable to fetch data"));
-      else {
-        for (uint8_t a = 0; a < remSens.size(); a++) {
-          JsonObject& entry = remSens[a];
-          JsonArray& remdir = nSet["remote"];
-          JsonArray& devs = remdir[0]["dev"];
+    //Refresh master config
+    Serial.println(F("\r\nRequest for sensor list"));
+    String xd;
+    xd = getFromSlave(0x4E, locdata[1].as<const char*>());
+    DynamicJsonBuffer remSensBuf(400);
+    JsonArray& remSens = remSensBuf.parseArray(xd);
+    if (!remSens.success()) Serial.println(F("Unable to fetch data"));
+    else {
+    for (uint8_t a = 0; a < remSens.size(); a++) {
+    JsonObject& entry = remSens[a];
+    JsonArray& remdir = nSet["remote"];
+    JsonArray& devs = remdir[0]["dev"];
 
-          int entryCode = isMember(devs, entry);
-          if (entryCode == -1) { //Create entry for new sensor
-            JsonObject& newEntry = devs.createNestedObject();
-            newEntry[0] = entry[0];
-            newEntry[1] = entry[1];
-          }
-        }
-      }
-      saveJson(nSet, SENSORS_FILE);
+    int entryCode = isMember(devs, entry);
+    if (entryCode == -1) { //Create entry for new sensor
+    JsonObject& newEntry = devs.createNestedObject();
+    newEntry[0] = entry[0];
+    newEntry[1] = entry[1];
+    }
+    }
+    }
+    saveJson(nSet, SENSORS_FILE);
 
-      //Send configs to slaves
+    //Send configs to slaves
 
 
-      rtd++;
+    rtd++;
     }
 
     nSensor = nSet["remote"].size();
     Serial.println("\nRemote:");
     for (uint8_t a = 0; a < nSensor; a++) {
-      Serial.print("\t" + nSet["remote"][a]["loc"][0].as<String>());
-      Serial.println(" : " + nSet["remote"][a]["loc"][1].as<String>());
-      for (uint8_t x = 0; x < nSet["remote"][a]["dev"].size(); x++)
-        Serial.println("\t\t*" + nSet["remote"][a]["dev"][x][0].as<String>());
+    Serial.print("\t" + nSet["remote"][a]["loc"][0].as<String>());
+    Serial.println(" : " + nSet["remote"][a]["loc"][1].as<String>());
+    for (uint8_t x = 0; x < nSet["remote"][a]["dev"].size(); x++)
+    Serial.println("\t\t*" + nSet["remote"][a]["dev"][x][0].as<String>());
     }
 
 
     String data = "\x4B[";
     for (int q = 0; q < nSet["remote"][0]["dev"].size(); q++) {
-      if (q > 0) data += ', ';
-      data += nSet["remote"][0]["dev"][q].as<String>();
+    if (q > 0) data += ', ';
+    data += nSet["remote"][0]["dev"][q].as<String>();
     }
     data += ']';
-
   */
   yield();
 }
@@ -358,53 +322,9 @@ idle:
     telnetDebug.print(F("Available stack: "));
     telnetDebug.println(ESP.getFreeHeap());
 
-    DynamicJsonBuffer jsonBuffer(2250);
-    File root = SD.open(SENSORS_FILE, FILE_READ);
-    JsonObject& nSet = jsonBuffer.parseObject(root);
-    root.close();
-    JsonArray& _saved = nSet["saved"];
-
-    telnetDebug.println(F("\r\nPort\tType\tPort Name\tDevice Name\t\tAddress (if supported)"));
-    for (int a = 0; a < ext.getCount(); a++) {
-      uint8_t _type = ext.typeOf(a);
-      JsonArray& _curr = nSet["local"][a];
-
-      telnetDebug.print(String(a + 1) + "/" + String(ext.getCount()));
-      telnetDebug.print('\t' + String(_type) + '\t');
-      const char* _n = _curr[0];
-      telnetDebug.print(_n);
-
-      if (_type == 40) {
-        for (uint8_t a = 0; a < 2 - (strlen(_n) / 8); a++)
-          telnetDebug.print('\t');
-        uint8_t *_q = ext.getAddress(a);
-        int pos = isMember(_q, _saved, 8);
-
-        _n = _saved[pos][0];
-        telnetDebug.print(_n);
-        for (uint8_t a = 0; a < 3 - (strlen(_n) / 8); a++)
-          telnetDebug.print('\t');
-        telnetDebug.print(F("("));
-
-        for (uint8_t y = 0; y < 8; y++) {
-          telnetDebug.print(*(_q + y));
-          telnetDebug.print(y < 7 ? ',' : ')');
-        }
-      }
-      telnetDebug.println();
-    }
-
-    telnetDebug.println(F("\r\nAll sensors:"));
-    for (uint8_t a = 0; a < _saved.size(); a++) {
-      JsonArray& _e =  _saved[a];
-      telnetDebug.print('\t' + String(a + 1) + '.');
-      telnetDebug.print(_e[0].as<const char*>());
-      telnetDebug.print('\t');
-      telnetDebug.println(_e[1].as<const char*>());
-    }
-    telnetDebug.println();
+    printSensors(&ext, telnetDebug);
   }
-  
+
   zegar.readRTC();
   server.handleClient();
   ArduinoOTA.handle();
@@ -457,6 +377,7 @@ idle:
 
       telnetDebug.println();
       telnetDebug.println(printDateTime(zegar));
+      bool _f = true;
       for (uint8_t c = 0; c < ext.getCount(); c++) {
         telnetDebug.print(String(c + 1) + '/' + String(ext.getCount()));
         telnetDebug.print('\t');
@@ -464,13 +385,16 @@ idle:
         int pos;
         String _name;
         switch (ext.typeOf(c)) {
+          default: pos = c;
+            _name = PSTR("UNKNOWN_TYPE:") + String(c);
+            break;
           case 0:
             telnetDebug.println();
             continue;
+          case 1:
           case 11:
           case 21:
-          case 22:
-          default: pos = c;
+          case 22: pos = c;
             _name = nSet[c][0].as<String>();
             break;
           case 40: pos = nSet[c][1].as<int>();
@@ -481,7 +405,12 @@ idle:
         double tempRead = ext.getTemp(c);
         telnetDebug.print('\t' + String(tempRead));
         telnetDebug.println('\t' + _name);
-        if (c > 0) dest.print(F(","));
+
+        if (tempRead == -127.00 || tempRead == 85.00)
+          continue;
+
+        if (!_f) dest.print(F(","));
+        else _f = false;
         dest.print(c);
         dest.print(F("="));
         dest.print(_name);
@@ -492,38 +421,38 @@ idle:
       dest.println(");");
       Serial.println(F("Remote devices are disabled"));
       /*
-            for (uint8_t rtd = 0; rtd < setts["remote"].size(); rtd++) {
-              JsonArray& locdata = setts["remote"][rtd];
-              const char* _n = locdata[0];
-              const char* _a = locdata[1];
-              IPAddress _target = settings.stringToIP(_a);
-              if (pinger.Ping(_target) == -1)
-                continue;
+        for (uint8_t rtd = 0; rtd < setts["remote"].size(); rtd++) {
+        JsonArray& locdata = setts["remote"][rtd];
+        const char* _n = locdata[0];
+        const char* _a = locdata[1];
+        IPAddress _target = settings.stringToIP(_a);
+        if (pinger.Ping(_target) == -1)
+        continue;
 
-              bool suc = sendToSlave('\x51', "", _target);
-              telnetDebug.println(suc ? F("suc") : F("nah"));
+        bool suc = sendToSlave('\x51', "", _target);
+        telnetDebug.println(suc ? F("suc") : F("nah"));
 
-              char* xd = new char[250];
-              getFromSlave(0x54, _target, xd, 250);
+        char* xd = new char[250];
+        getFromSlave(0x54, _target, xd, 250);
 
-              DynamicJsonBuffer readBuf;
-              JsonArray& readVal = readBuf.parseArray(xd);
-              dest.print(_n);
-              dest.print(F(":("));
-              for (uint8_t a = 0; a < readVal.size(); a++) {
-                JsonArray& _e = readVal[a];
-                if (a != 0)
-                  dest.print(F(","));
-                dest.print(_e[0].as<int>());
-                dest.print(F("="));
-                dest.print(_e[1].as<const char*>());
-                dest.print(F("="));
-                dest.print(_e[2].as<double>());
-                dest.flush();
-              }
-              dest.println(F(");"));
-              delete[] xd;
-            }*/
+        DynamicJsonBuffer readBuf;
+        JsonArray& readVal = readBuf.parseArray(xd);
+        dest.print(_n);
+        dest.print(F(":("));
+        for (uint8_t a = 0; a < readVal.size(); a++) {
+        JsonArray& _e = readVal[a];
+        if (a != 0)
+        dest.print(F(","));
+        dest.print(_e[0].as<int>());
+        dest.print(F("="));
+        dest.print(_e[1].as<const char*>());
+        dest.print(F("="));
+        dest.print(_e[2].as<double>());
+        dest.flush();
+        }
+        dest.println(F(");"));
+        delete[] xd;
+        }*/
       dest.flush();
       dest.close();
       delete[] _pa;
@@ -540,42 +469,27 @@ idle:
   outLoop = true;
 }
 
-bool sendToSlave(const char _c, const char* _d, IPAddress _loc) {
+bool sendToSlave(char _c, const char* _d, IPAddress _loc) {
   if (telnet.connect(_loc, 23)) {
-    telnetDebug.print(F("Sending data: "));
-    telnetDebug.println(settings.IPtoString(_loc));
-    telnetDebug.println(_d);
-    if (_c != 0) {
-      telnet.write(_c);
-      telnetDebug.println(_c);
-    }
-    if (strcmp(_d, "")) {
-      telnet.write(_d, strlen(_d));
-      telnetDebug.println(_d);
-    }
-    telnet.flush();
+    telnet.setNoDelay(false);
+    //telnet.write(_c);
+    //if (strcmp(_d, ""))
+    telnet.print((char)_c + String(_d));
 
     char com = '\x15';
     uint32_t tt = millis();
     while (millis() - tt < DEFAULT_TIMEOUT && !telnet.available())
       yield();
-    while (telnet.available() > 0) {
+    while (telnet.available() > 0)
       com = (char)telnet.read();
-      telnetDebug.print(com, DEC);
-      telnetDebug.print(F(" | "));
-      telnetDebug.print(com, HEX);
-      telnetDebug.print(F(" | "));
-      telnetDebug.println(com);
-    }
     telnet.stop();
     if (com == '\x06')
       return true;
-    else telnetDebug.println(F("Communication error"));
-  } else telnetDebug.println(PSTR("Unable to connect to ") + String(_loc));
+  } telnetDebug.println(PSTR("[Error] Connecting to ") + String(_loc));
   return false;
 }
 
-void getFromSlave(int8_t _code, IPAddress _loc, char* _out, uint16_t _s) {
+void getFromSlave(int8_t _code, IPAddress _loc, char* _out, uint32_t _s) {
   if (telnet.connect(_loc, 23)) {
     memset(_out, 0, _s);
     telnetDebug.println(PSTR("Sending request: ") + settings.IPtoString(_loc));
@@ -583,13 +497,15 @@ void getFromSlave(int8_t _code, IPAddress _loc, char* _out, uint16_t _s) {
     telnet.flush();
 
     uint32_t tt = millis();
+    uint32_t a = 0;
     while (millis() - tt < DEFAULT_TIMEOUT && !telnet.available())
       yield();
     if (telnet.available()) {
-      uint16_t a = 0;
-      while (telnet.available() && a != _s - 1) {
+      while (telnet.available() && a < _s) {
         _out[a] = (char)telnet.read();
         a++;
+        tt = millis();
+        while (!telnet.available() && millis() - tt < 25) yield();
       }
       while (telnet.available() && telnet.read());
     } else telnetDebug.println(F("Communication error"));
@@ -658,8 +574,8 @@ void devconfig() {
   if (server.method() == HTTP_POST) {
     if (server.arg("a") == "l" && server.args() == 1) {
       server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-      DynamicJsonBuffer *output = new DynamicJsonBuffer(JSON_OBJECT_SIZE(11));
-      JsonObject& data = output->createObject();
+      DynamicJsonBuffer output(JSON_OBJECT_SIZE(11));
+      JsonObject& data = output.createObject();
       data["SN"] = settings.name();
       data["SS"] = settings.ssidAP();
       data["OS"] = settings.ssid();
@@ -674,7 +590,6 @@ void devconfig() {
       String resp;
       data.printTo(resp);
       server.send(200, F("application/json"), resp);
-      delete output;
     } else if (settings.authenticate(
                  server.arg("SL").c_str(),
                  server.arg("SPL").c_str())) {
@@ -711,6 +626,9 @@ void devconfig() {
         settings.remove(server.arg("SL").c_str(),
                         server.arg("SPL").c_str(),
                         SETTINGS_FILE);
+        settings.remove(server.arg("SL").c_str(),
+                        server.arg("SPL").c_str(),
+                        SENSORS_FILE);
         ESP.restart();
       }
     } else returnLoginFail();
@@ -721,13 +639,6 @@ void devconfig() {
 void timeset() {
   if (!settings.webAuthenticate(&server))
     return server.requestAuthentication();
-
-  Serial.println(F("\r\n[HTML] Time:"));
-  for (int x = server.args() - 1; x >= 0; x--) {
-    Serial.print(server.argName(x));
-    Serial.print(F("="));
-    Serial.println(server.arg(x));
-  }
 
   if (server.method() == HTTP_POST) {
     if (server.arg("a") == "l") {
@@ -749,13 +660,13 @@ void timeset() {
         if (server.hasArg("UN"))
           settings.useNTP = (server.arg("UN")[0] == 1);
         if (server.hasArg("NS"))
-          settings.ntpServer(server.arg("nS").c_str());
+          settings.ntpServer(server.arg("NS").c_str());
         if (server.hasArg("EP")) {
-          uint32_t newLast = strtoul(server.arg("EP").c_str(), NULL, 10);
-          newLast += 3600 * settings.timezone;
-          if (letni) newLast += 3600;
-          zegar.setRTC(newLast);
-          settings.lastUpdate = newLast;
+          uint32_t newTime = strtoul(server.arg("EP").c_str(), NULL, 10);
+          newTime += 3600 * settings.timezone;
+          if (letni) newTime += 3600;
+          zegar.setRTC(newTime);
+          settings.lastUpdate = newTime;
         }
         settings.save();
         returnOK(F("Time settings saved"));
@@ -765,61 +676,77 @@ void timeset() {
   return void();
 }
 
-void sensorBroadcast() {
-  if (!settings.webAuthenticate(&server))
-    return server.requestAuthentication();
-
+void mergeSensors() {
+  char* _r = new char[1200];
+  memset(_r, 0, 1200);
   DynamicJsonBuffer sensBuff(2250);
   File tmpSens = SD.open(SENSORS_FILE, FILE_READ);
   JsonObject& sensSet = sensBuff.parseObject(tmpSens);
   tmpSens.close();
-  /*
-    Take all configs first
-    Select what do we want
-    Send back
-  */
-  for (uint8_t rtd = 0; rtd < sensSet["remote"].size(); rtd++) {
-    JsonArray& locdata = sensSet["remote"][rtd];
-    const char* _n = locdata[0];
-    const char* _a = locdata[1];
-    IPAddress _target = settings.stringToIP(_a);
-    if (pinger.Ping(_target) == -1) {
-      telnetDebug.print(F("Device '"));
-      telnetDebug.print(_n);
-      telnetDebug.print(F("' at "));
-      telnetDebug.print(_a);
-      telnetDebug.println(F(" is offline"));
-      rtd++;
+  JsonArray& _remdev = sensSet["remote"];
+  JsonArray& _saved = sensSet["saved"];
+
+  Serial.println(F("Synchronizing with slave devices"));
+  for (uint8_t a = 0; a < _remdev.size(); a++) {
+    const char* _n = _remdev[a][0];
+    const char* _a = _remdev[a][1];
+    Serial.print(F("\tDevice \""));
+    Serial.print(_n);
+    Serial.print(F("\" ("));
+    Serial.print(_a);
+    Serial.print(F("): "));
+    if (pinger.Ping(_a) == -1) {
+      Serial.println(F("----"));
+      continue;
+    } else Serial.println(F("Online"));
+
+    getFromSlave(0x4E, settings.stringToIP(_a), _r, 1200);
+    Serial.println(_r);
+    Serial.println();
+    if (addDiff(_saved, _r))
+      saveJson(sensSet, SENSORS_FILE);
+  }
+  //Finished working with received JSON
+  delete[] _r;
+  return void();
+}
+
+void sendSensors() {
+  DynamicJsonBuffer sensBuff(2250);
+  File tmpSens = SD.open(SENSORS_FILE, FILE_READ);
+  JsonObject& sensSet = sensBuff.parseObject(tmpSens);
+  JsonArray& _remdev = sensSet["remote"];
+  tmpSens.close();
+
+  for (uint8_t a = 0; a < _remdev.size(); a++) {
+    IPAddress _a = settings.stringToIP(_remdev[a][1]);
+    const char* _n = _remdev[a][0];
+
+    Serial.print("Sending config to device " + String(_n) + ":\t");
+    if (pinger.Ping(_a) != -1)
+      Serial.println(sendToSlave(0x4B, (sensSet["saved"].as<String>()).c_str(), _a) ? "Success" : "Fail");
+    else {
+      Serial.println(F("Offline"));
       continue;
     }
-
-    telnetDebug.println(F("\r\nSending config"));
-    const char* _s = sensSet["saved"];
-    telnetDebug.println(_s);
-    bool succ = sendToSlave('\x4B', _s, _target);
-    telnetDebug.println(succ ? F("suc") : F("nah"));
-    yield();
   }
-  server.sendContent(F("HTTP/1.1 303 See Other\r\nLocation:/sensors\r\n"));
-  return void();
 }
 
 void sensorSettings() {
   if (!settings.webAuthenticate(&server))
     return server.requestAuthentication();
 
-  if (server.method() == HTTP_GET && server.args() == 0) {
-    DynamicJsonBuffer sensBuff(2250);
-    File tmpSens = SD.open(SENSORS_FILE , FILE_READ);
-    JsonObject& sensSet = sensBuff.parseObject(tmpSens);
-    tmpSens.close();
-    JsonArray& _saved = sensSet["saved"];
-    JsonArray& _local = sensSet["local"];
+  DynamicJsonBuffer sensBuff(2250);
+  File tmpSens = SD.open(SENSORS_FILE , FILE_READ);
+  JsonObject& sensSet = sensBuff.parseObject(tmpSens);
+  tmpSens.close();
+  JsonArray& _saved = sensSet["saved"];
+  JsonArray& _local = sensSet["local"];
 
-    if (!sensSet.success())
-      return;
+  if (!sensSet.success())
+    return;
 
-    server.sendContent(F("<!DOCTYPE html><html><head><title>Sensors</title>\
+  server.sendContent(F("<!DOCTYPE html><html><head><title>Sensors</title>\
 <style>table, th, td{border: 1px solid black;text-align: center}</style>\
 </head><body><form id=\"ports\" method=\"POST\" action=\"/editports\" \
 onsubmit=\"var a=document.forms.ports;for(var i=0;i<a.length-1;i++){var b=a[i]\
@@ -827,66 +754,69 @@ onsubmit=\"var a=document.forms.ports;for(var i=0;i<a.length-1;i++){var b=a[i]\
 Available sensors</b></caption><tr><th>Port</th><th>Type</th><th>Port Name\
 </th><th>Device Name</th><th>Temperature</th></tr>"));
 
-    for (uint8_t a = 0; a < ext.getCount(); a++) {
+  for (uint8_t a = 0; a < ext.getCount(); a++) {
 
-      while (ext.lock())
-        yield();
+    while (ext.lock())
+      yield();
 
-      uint8_t _t = ext.typeOf(a);
-      const char* _n = _local[a][0];
+    uint8_t _t = ext.typeOf(a);
+    const char* _n = _local[a][0];
 
-      server.sendContent(F("<tr><td>"));
-      server.sendContent(String(a + 1));
-      server.sendContent(F("</td><td>"));
-      server.sendContent(String(_t));
-      server.sendContent(F("</td><td><input type='text' name='"));
-      server.sendContent(String(a));
-      server.sendContent(F("' placeholder='"));
-      server.sendContent(_n);
-      server.sendContent(F("'></td><td>"));
+    server.sendContent(F("<tr><td>"));
+    server.sendContent(String(a + 1));
+    server.sendContent(F("</td><td>"));
+    server.sendContent(String(_t));
+    server.sendContent(F("</td><td><input type='text' name='"));
+    server.sendContent(String(a));
+    server.sendContent(F("' placeholder='"));
+    server.sendContent(_n);
+    server.sendContent(F("'></td><td>"));
 
-      if (_t == 40) {
-        int pos = _local[a][1].as<int>();
-        const char* _nn = _saved[pos][0];
-        server.sendContent(_nn);
-      } else server.sendContent(F("N/A"));
+    if (_t == 40) {
+      int pos = _local[a][1].as<int>();
+      const char* _nn = _saved[pos][0];
+      server.sendContent(_nn);
+    } else server.sendContent(F("N/A"));
 
-      server.sendContent(F("</td><td>"));
+    server.sendContent(F("</td><td>"));
 
-      if (_t != 0)
-        server.sendContent(String(ext.getTemp(a)) + (char)176 + 'C');
-      else server.sendContent(F("N/A"));
-      server.sendContent(F("</td></tr>"));
-    }
+    if (_t != 0)
+      server.sendContent(String(ext.getTemp(a)) + (char)176 + 'C');
+    else server.sendContent(F("N/A"));
+    server.sendContent(F("</td></tr>"));
+  }
 
-    server.sendContent(F("</table><button type=\"submit\">Save Changes</button>\
+  server.sendContent(F("</table><button type=\"submit\">Save Changes</button>\
 </form><form id=\"saved\" method=\"POST\" action=\"/editsaved\" onsubmit=\"\
 var a=document.forms.saved.elements;for(var t=0;t<a.length-1;t+=2)a[t].disabled\
 =(a[t+1].checked||a[t].value==''||a[t].placeholder==a[t].value);\"><table>\
 <caption><b>Name Settings</b></caption><th>Name</th><th>Address/Port</th><th>\
 Remove</th>"));
 
-    for (uint8_t a = 0; a < sensSet["saved"].size(); a++) {
-      JsonArray& _e = _saved[a];
-      server.sendContent(F("<tr><td><input type='text' name='"));
-      server.sendContent(String(a)); //Position in file
-      server.sendContent(F("' placeholder='"));
-      server.sendContent(_e[0].as<const char*>());
-      server.sendContent(F("'><td>"));
-      server.sendContent(_e[1]);
-      server.sendContent(F("</td><td><input type='checkbox' name='r' value='"));
-      server.sendContent(String(a));
-      server.sendContent(F("'>Remove</td></tr>"));
-    }
-
-    server.sendContent(F("</table><button type=\"submit\">Save Changes\
-</button></form><button onclick=\"location.href='/sensorsbdc'\">\
-Sync all devices</button></body></html>"));
+  for (uint8_t a = 0; a < sensSet["saved"].size(); a++) {
+    JsonArray& _e = _saved[a];
+    server.sendContent(F("<tr><td><input type='text' name='"));
+    server.sendContent(String(a)); //Position in file
+    server.sendContent(F("' placeholder='"));
+    server.sendContent(_e[0].as<const char*>());
+    server.sendContent(F("'><td>"));
+    server.sendContent(_e[1]);
+    server.sendContent(F("</td><td><input type='checkbox' name='r' value='"));
+    server.sendContent(String(a));
+    server.sendContent(F("'>Remove</td></tr>"));
   }
+
+  server.sendContent(F("</table><button type=\"submit\">Save Changes\
+</button></form><button onclick=\"location.href=' / sensorsbdc'\">\
+Sync all devices</button></body></html>"));
+
   return void();
 }
 
 void editports() {
+  if (!settings.webAuthenticate(&server))
+    return server.requestAuthentication();
+
   Serial.println(F("\r\n[HTML] Port edit:"));
   for (int x = 0; x < server.args(); x++) {
     Serial.print(server.argName(x));
@@ -894,7 +824,7 @@ void editports() {
     Serial.println(server.arg(x));
   }
 
-  if (server.args() != 0 && server.method() == HTTP_POST) {
+  if (server.args() != 0) {
     DynamicJsonBuffer sensBuff(2250);
     File tmpSens = SD.open(SENSORS_FILE , FILE_READ);
     JsonObject& sensSet = sensBuff.parseObject(tmpSens);
@@ -913,6 +843,9 @@ void editports() {
 }
 
 void editsaved() {
+  if (!settings.webAuthenticate(&server))
+    return server.requestAuthentication();
+
   Serial.println(F("\r\n[HTML] Sensor edit:"));
   for (int x = (server.args() - 1); x >= 0 ; x--) {
     Serial.print(server.argName(x));
@@ -920,7 +853,7 @@ void editsaved() {
     Serial.println(server.arg(x));
   }
 
-  if (server.args() != 0 && server.method() == HTTP_POST) {
+  if (server.args() != 0) {
     DynamicJsonBuffer sensBuff(2250);
     File tmpSens = SD.open(SENSORS_FILE , FILE_READ);
     JsonObject& sensSet = sensBuff.parseObject(tmpSens);
@@ -943,7 +876,7 @@ void editsaved() {
   server.sendContent(F("HTTP/1.1 303 See Other\r\nLocation:/sensors\r\n"));
 }
 
-void returnOK(const __FlashStringHelper* _m) {
+void returnOK(const __FlashStringHelper * _m) {
   server.send(200, F("text/plain"), _m);
   return void();
 }
@@ -1057,7 +990,7 @@ void handleNotFound() {
   message += '\n';
   for (uint8_t i = 0; i < server.args(); i++) {
     message += F(" NAME:");
-    message += server.argName(i);
+    message += server.argName(i);//
     message += F("\n VALUE:");
     message += server.arg(i) + "\n";
   }

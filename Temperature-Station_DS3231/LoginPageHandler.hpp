@@ -54,8 +54,8 @@ class LoginPageHandler : public RequestHandler {
       } else if (status > 0)
         return false;
       /* Codes 1-4 are invalid */
-      ser->sendHeader("Set-Cookie", set->encryptKey(CommonUtils::globalTimer) +
-                      "; Expires=" + CommonUtils::printCookieDate(CommonUtils::globalTimer, CommonUtils::setptr));
+      String cookie = set->encryptKey(CommonUtils::globalTimer);
+      ser->sendHeader("Set-Cookie", cookie);
       return true;
     }
 

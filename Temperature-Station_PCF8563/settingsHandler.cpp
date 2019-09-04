@@ -135,14 +135,13 @@ bool settingsHandler::load() {
 #endif
   File _toSave = SPIFFS.open(this->_file, "r");
   //Longest config i could create
-  StaticJsonBuffer<675> *_ld = new StaticJsonBuffer<675>;
-  JsonObject& _data = _ld->parseObject(_toSave);
+  StaticJsonBuffer<675> _ld;
+  JsonObject& _data = _ld.parseObject(_toSave);
   _toSave.close();
   if (!_data.success()) {
 #ifdef S_DEBUG
     this->_print(F("Load error"));
 #endif
-    delete _ld;
     return false;
   }
 
@@ -164,7 +163,6 @@ bool settingsHandler::load() {
 #ifdef S_DEBUG
   this->_print(F("Loaded successfully"));
 #endif
-  delete _ld;
   return true;
 }
 

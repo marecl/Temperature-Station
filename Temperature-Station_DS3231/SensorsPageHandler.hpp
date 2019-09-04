@@ -2,7 +2,6 @@
 #define SENSORS_PAGE_H
 
 #include "CommonUtils.hpp"
-#include "LoginPageHandler.hpp"
 
 class SensorsPageHandler : public RequestHandler {
   protected:

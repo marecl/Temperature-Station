@@ -48,7 +48,7 @@ class CommonUtils {
       return void();
     }
 
-    static void returnOK(ESP8266WebServer *_s, const __FlashStringHelper* _m) {
+    static void returnOK(ESP8266WebServer *_s, String _m) {
       _s->send(200, F("text/plain"), _m);
       return void();
     }

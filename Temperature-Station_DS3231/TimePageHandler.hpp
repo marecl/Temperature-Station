@@ -8,7 +8,6 @@
     String _uri;
     uint32_t _epoch;
     settingsManager *_set;
-    RtcDateTime _current;
 
   public:
     TimePageHandler(const char* uri, settingsManager *s)
@@ -23,18 +22,19 @@
 
     bool handle(ESP8266WebServer& server, HTTPMethod requestMethod, String requestUri) override {
       if (!LoginPageHandler::verifyLogin(&server, CommonUtils::setptr)) {
-    LoginPageHandler::redirectToLogin(&server);
-    return;
-  }
+        LoginPageHandler::redirectToLogin(&server);
+        return true;
+      }
+  RtcDateTime _now = CommonUtils::globalTimer;
       if (server.arg("a") == "l") {
         char _d[20];
         snprintf_P(_d, 20,
                    PSTR("%04u-%02u-%02uT%02u:%02u"),
-                   teraz.Year(),
-                   teraz.Month(),
-                   teraz.Day(),
-                   teraz.Hour(),
-                   teraz.Minute());
+                   _now.Year(),
+                   _now.Month(),
+                   _now.Day(),
+                   _now.Hour(),
+                   _now.Minute());
         server.send(200, F("text/plain"), _d);
       } else if (server.arg("a") == "s" && _set->authenticate(server.arg("SL").c_str(), server.arg("SPL").c_str())) {
         if (server.hasArg("TZ"))
